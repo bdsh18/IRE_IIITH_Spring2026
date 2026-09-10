@@ -1,0 +1,224 @@
+from __future__ import annotations
+import argparse
+import bisect
+from collections import Counter, defaultdict
+from pathlib import Path
+import math
+import numpy as np
+import pandas as pd
+
+FEATURE_NAMES = [
+    "category_affinity",
+    "topic_affinity",
+    "semantic_score",
+    "popularity",
+    "freshness_hours_inv",
+    "session_prior_impressions",
+    "session_clicks_so_far",
+    "position_bias",
+    "history_length",
+]
+
+def optional_column(frame: pd.DataFrame, name: str, default):
+    if name in frame.columns:
+        return frame[name]
+    return pd.Series([default] * len(frame), index=frame.index)
+
+
+def train_popularity(train_impressions: pd.DataFrame) -> Counter:
+    counts: Counter = Counter()
+    for row in train_impressions.itertuples(index=False):
+        counts.update(str(a) for a in row.clicked_ids)
+    return counts
+
+
+def causal_click_times(impressions: pd.DataFrame) -> dict[str, list]:
+    click_times: dict[str, list] = defaultdict(list)
+    for row in impressions.itertuples(index=False):
+        for article in row.clicked_ids:
+            click_times[str(article)].append(row.timestamp)
+    for times in click_times.values():
+        times.sort()
+    return click_times
+
+
+def causal_popularity_snapshot(candidates: list[str], click_times: dict[str, list], as_of) -> dict[str, int]:
+    return {article: bisect.bisect_left(click_times.get(article, []), as_of) for article in candidates}
+
+
+def user_session_order(impressions: pd.DataFrame) -> dict[str, int]:
+    ordered = impressions.sort_values("timestamp")
+    order: dict[str, int] = {}
+    seen: dict[tuple[str, str], int] = defaultdict(int)
+    for row in ordered.itertuples(index=False):
+        key = (str(row.user_id), str(getattr(row, "session_id", "") or ""))
+        order[str(row.impression_id)] = seen[key]
+        seen[key] += 1
+    return order
+
+
+def user_session_click_count(impressions: pd.DataFrame) -> dict[str, int]:
+    ordered = impressions.sort_values("timestamp")
+    counts: dict[str, int] = {}
+    running: dict[tuple[str, str], int] = defaultdict(int)
+    for row in ordered.itertuples(index=False):
+        key = (str(row.user_id), str(getattr(row, "session_id", "") or ""))
+        counts[str(row.impression_id)] = running[key]
+        running[key] += len(row.clicked_ids)
+    return counts
+
+
+def category_affinity(history_ids: list, history_weights: list, category_by_id: dict[str, str], candidate_category: str) -> float:
+    weights: Counter = Counter()
+    for article, weight in zip(history_ids, history_weights):
+        weights[category_by_id.get(str(article), "")] += weight
+    total = max(sum(weights.values()), 1e-9)
+    return weights[candidate_category] / total
+
+
+def topic_affinity(history_ids: list, history_weights: list, topics_by_id: dict[str, tuple], candidate_topics: tuple) -> float:
+    if not candidate_topics:
+        return 0.0
+    topic_weights: Counter = Counter()
+    for article, weight in zip(history_ids, history_weights):
+        for topic in topics_by_id.get(str(article), ()):
+            topic_weights[topic] += weight
+    if not topic_weights:
+        return 0.0
+    strongest = max(topic_weights.values())
+    return sum(topic_weights[t] for t in candidate_topics) / (strongest * len(candidate_topics))
+
+
+def semantic_score(history_ids: list, history_weights: list, positions: dict[str, int] | None, vectors: np.ndarray | None, candidate_id: str) -> float:
+    if positions is None or vectors is None or candidate_id not in positions:
+        return 0.0
+    indices, article_weights = [], []
+    for article, weight in zip(history_ids, history_weights):
+        position = positions.get(str(article))
+        if position is not None:
+            indices.append(position); article_weights.append(weight)
+    if not indices:
+        return 0.0
+    user_vector = (vectors[indices] * np.asarray(article_weights)[:, None]).sum(axis=0)
+    norm = float(np.linalg.norm(user_vector))
+    if norm < 1e-12:
+        return 0.0
+    return float(vectors[positions[candidate_id]] @ (user_vector / norm))
+
+
+def article_metadata(articles: pd.DataFrame) -> tuple[dict[str, str], dict[str, tuple], dict[str, object]]:
+    category_by_id = dict(zip(articles.article_id.astype(str), articles.category.fillna("")))
+    topics_series = optional_column(articles, "topics", None)
+    topics_by_id = {
+        article_id: tuple(topics) if topics is not None and hasattr(topics, "__iter__") and not isinstance(topics, str) else ()
+        for article_id, topics in zip(articles.article_id.astype(str), topics_series)
+    }
+    published_series = optional_column(articles, "published_time", pd.NaT)
+    published_by_id = dict(zip(articles.article_id.astype(str), published_series))
+    return category_by_id, topics_by_id, published_by_id
+
+
+def load_embeddings(store: Path, dataset: str) -> tuple[dict[str, int] | None, np.ndarray | None]:
+    path = store / dataset / "article_embeddings.npz"
+    if not path.exists():
+        return None, None
+    saved = np.load(path)
+    ids = saved["article_ids"].astype(str).tolist()
+    return {article: i for i, article in enumerate(ids)}, saved["vectors"].astype(np.float32)
+
+
+def candidate_features(
+    article: str,
+    position: int,
+    history_ids: list,
+    weights: list,
+    category_by_id: dict[str, str],
+    topics_by_id: dict[str, tuple],
+    popularity: dict,
+    max_pop: int,
+    positions: dict[str, int] | None,
+    vectors: np.ndarray | None,
+    published_by_id: dict,
+    now,
+    session_count: int,
+    session_clicks: int,
+) -> dict:
+    candidate_category = category_by_id.get(article, "")
+    candidate_topics = topics_by_id.get(article, ())
+    freshness = 0.0
+    published = published_by_id.get(article) if published_by_id else None
+    if published is not None and pd.notna(published):
+        hours = max(0.0, (now - published).total_seconds() / 3600)
+        freshness = math.exp(-hours / (24 * 4))
+    return {
+        "article_id": article,
+        "category_affinity": category_affinity(history_ids, weights, category_by_id, candidate_category),
+        "topic_affinity": topic_affinity(history_ids, weights, topics_by_id, candidate_topics),
+        "semantic_score": semantic_score(history_ids, weights, positions, vectors, article),
+        "popularity": math.log1p(popularity.get(article, 0)) / math.log1p(max(max_pop, 1)),
+        "freshness_hours_inv": freshness,
+        "session_prior_impressions": session_count,
+        "session_clicks_so_far": session_clicks,
+        "position_bias": 1.0 / math.log2(position + 2),
+        "history_length": len(history_ids),
+    }
+
+
+def build_features(store: Path, dataset: str, split: str) -> pd.DataFrame:
+    articles = pd.read_parquet(store / dataset / "articles.parquet")
+    category_by_id, topics_by_id, published_by_id = article_metadata(articles)
+
+    positions, vectors = load_embeddings(store, dataset)
+
+    train_impressions = pd.read_parquet(store / dataset / "train_impressions.parquet")
+    full_popularity = train_popularity(train_impressions)
+    max_pop = max(full_popularity.values(), default=1)
+    click_times = causal_click_times(train_impressions) if split == "train" else None
+
+    impressions = pd.read_parquet(store / dataset / f"{split}_impressions.parquet")
+    session_rank = user_session_order(impressions)
+    session_clicks = user_session_click_count(impressions)
+
+    rows = []
+    for row in impressions.itertuples(index=False):
+        history_ids = list(row.history_ids)
+        weights = list(row.history_recency_weights)
+        candidates = [str(c) for c in row.candidate_ids]
+        clicked = {str(c) for c in row.clicked_ids}
+        session_count = session_rank.get(str(row.impression_id), 0)
+        session_click_count = session_clicks.get(str(row.impression_id), 0)
+
+        popularity = causal_popularity_snapshot(candidates, click_times, row.timestamp) if split == "train" else full_popularity
+
+        for position, article in enumerate(candidates):
+            features = candidate_features(
+                article, position, history_ids, weights, category_by_id, topics_by_id,
+                popularity, max_pop, positions, vectors, published_by_id, row.timestamp,
+                session_count, session_click_count,
+            )
+            rows.append({
+                "dataset": dataset,
+                "impression_id": str(row.impression_id),
+                "label": int(article in clicked),
+                **features,
+            })
+    return pd.DataFrame(rows)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--store", type=Path, default=Path("data/processed"))
+    parser.add_argument("--dataset", choices=["mind", "ebnerd"], required=True)
+    parser.add_argument("--split", default="validation", choices=["train", "validation", "test"])
+    parser.add_argument("--output", type=Path, default=None)
+    args = parser.parse_args()
+
+    features = build_features(args.store, args.dataset, args.split)
+    output = args.output or (args.store / args.dataset / f"{args.split}_features.parquet")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    features.to_parquet(output, index=False)
+    print(f"{len(features):,} rows -> {output}")
+
+
+if __name__ == "__main__":
+    main()

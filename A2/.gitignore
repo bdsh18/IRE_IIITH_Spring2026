@@ -1,0 +1,14 @@
+*.zip
+*.pt
+*.ckpt
+data/
+outputs/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+.DS_Store
+.vscode/
+.idea/
