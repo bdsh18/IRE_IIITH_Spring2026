@@ -10,7 +10,7 @@ import pandas as pd
 
 from bm25_retrieval import InvertedBM25, query_from_history
 from build_pipeline import recency_weights
-from features import FEATURE_NAMES, candidate_features
+from features import FEATURE_NAMES, SUBMISSION_TIME_UNAVAILABLE, candidate_features
 from mind_personalized_ranker import member, popularity as click_popularity
 from reranker import build_dataset_features, train_model
 
@@ -171,7 +171,7 @@ def main() -> None:
     submission_zip = args.output_dir / "mind_submission.zip"
 
     print("Training the Q2 re-ranker on the small-scale processed store...")
-    columns = FEATURE_NAMES + ["bm25_score"]
+    columns = [name for name in FEATURE_NAMES if name not in SUBMISSION_TIME_UNAVAILABLE] + ["bm25_score"]
     train_features = build_dataset_features(args.store, "mind", "train", 0)
     model = train_model(train_features, columns)
 

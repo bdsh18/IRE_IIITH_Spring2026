@@ -19,6 +19,8 @@ FEATURE_NAMES = [
     "history_length",
 ]
 
+SUBMISSION_TIME_UNAVAILABLE = ["session_prior_impressions", "session_clicks_so_far"]
+
 def optional_column(frame: pd.DataFrame, name: str, default):
     if name in frame.columns:
         return frame[name]

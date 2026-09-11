@@ -5,10 +5,12 @@ from pathlib import Path
 
 import numpy as np
 
+from features import FEATURE_NAMES
 from mind_personalized_ranker import metrics
-from reranker import build_dataset_features, rank_from_scores, run
+from reranker import build_dataset_features, rank_from_scores, run, score_validation, train_model
 
 METRIC_NAMES = ["auc", "mrr", "ndcg@5", "ndcg@10"]
+IMPROVEMENT_FEATURE = "freshness_hours_inv"
 
 
 def per_impression_metric_series(per_impression: dict, score_key: str, metric_index: int) -> dict[str, float]:
@@ -35,8 +37,6 @@ def paired_bootstrap(baseline: dict[str, float], improved: dict[str, float], sam
 
 
 def ablate(store: Path, dataset: str, limit: int) -> dict:
-    from reranker import FEATURE_NAMES, score_validation, train_model
-
     columns = FEATURE_NAMES + ["bm25_score"]
     train_features = build_dataset_features(store, dataset, "train", 0)
     valid_features = build_dataset_features(store, dataset, "validation", limit)
@@ -50,6 +50,27 @@ def ablate(store: Path, dataset: str, limit: int) -> dict:
         result["metrics"][name] = paired_bootstrap(baseline, improved)
     return result
 
+def score_with_columns(store: Path, dataset: str, limit: int, columns: list[str]) -> dict:
+    train_features = build_dataset_features(store, dataset, "train", 0)
+    valid_features = build_dataset_features(store, dataset, "validation", limit)
+    model = train_model(train_features, columns)
+    return score_validation(model, valid_features, columns)
+
+
+def improvement_ablation(store: Path, dataset: str, limit: int) -> dict:
+    with_feature = FEATURE_NAMES + ["bm25_score"]
+    without_feature = [name for name in FEATURE_NAMES if name != IMPROVEMENT_FEATURE] + ["bm25_score"]
+
+    baseline_scores = score_with_columns(store, dataset, limit, without_feature)
+    improved_scores = score_with_columns(store, dataset, limit, with_feature)
+
+    result = {"dataset": dataset, "improvement_feature": IMPROVEMENT_FEATURE, "metrics": {}}
+    for index, name in enumerate(METRIC_NAMES):
+        baseline = per_impression_metric_series(baseline_scores, "model_score", index)
+        improved = per_impression_metric_series(improved_scores, "model_score", index)
+        result["metrics"][name] = paired_bootstrap(baseline, improved)
+    return result
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -59,7 +80,11 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("outputs/q3_ablation.json"))
     args = parser.parse_args()
 
-    result = ablate(args.store, args.dataset, args.limit)
+    result = {
+        "dataset": args.dataset,
+        "reranker_vs_bm25": ablate(args.store, args.dataset, args.limit),
+        "feature_ablation": improvement_ablation(args.store, args.dataset, args.limit),
+    }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))
