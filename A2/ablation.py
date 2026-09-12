@@ -34,10 +34,8 @@ def paired_bootstrap(baseline: dict[str, float], improved: dict[str, float], sam
         "ci95_high": round(high, 6),
         "excludes_zero": bool(low > 0 or high < 0),
     }
-def score_with_columns(store: Path, dataset: str, limit: int, columns: list[str], train_features=None) -> dict:
-    if train_features is None:
-        train_features = build_dataset_features(store, dataset, "train", 0)
-    valid_features = build_dataset_features(store, dataset, "validation", limit)
+
+def score_with_columns(train_features, valid_features, columns: list[str]) -> dict:
     model = train_model(train_features, columns)
     return score_validation(model, valid_features, columns)
 
@@ -72,9 +70,10 @@ def main() -> None:
     without_feature_columns = [name for name in FEATURE_NAMES if name != IMPROVEMENT_FEATURE] + ["bm25_score"]
 
     train_features = build_dataset_features(args.store, args.dataset, "train", 0)
+    valid_features = build_dataset_features(args.store, args.dataset, "validation", args.limit)
 
-    full_scores = score_with_columns(args.store, args.dataset, args.limit, full_columns, train_features)
-    without_feature_scores = score_with_columns(args.store, args.dataset, args.limit, without_feature_columns, train_features)
+    full_scores = score_with_columns(train_features, valid_features, full_columns)
+    without_feature_scores = score_with_columns(train_features, valid_features, without_feature_columns)
 
     result = {
         "dataset": args.dataset,

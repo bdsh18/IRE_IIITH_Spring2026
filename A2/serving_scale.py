@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 from bm25_retrieval import InvertedBM25, query_from_history
 from features import (
@@ -94,7 +95,7 @@ def latency_benchmark(store: Path, dataset: str, model, columns: list[str], repe
 
     durations = []
     benchmark_start = time.perf_counter()
-    for row in sample.itertuples(index=False):
+    for row in tqdm(sample.itertuples(index=False), total=len(sample), desc="Latency benchmark", unit="request"):
         start = time.perf_counter()
         history_ids = list(row.history_ids)
         weights = list(row.history_recency_weights)

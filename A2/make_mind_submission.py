@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 from bm25_retrieval import InvertedBM25, query_from_history
 from build_pipeline import recency_weights
@@ -43,7 +44,7 @@ def entity_ids(raw: str) -> list[str]:
 def load_entity_vectors(train: Path) -> dict[str, np.ndarray]:
     vectors: dict[str, np.ndarray] = {}
     with zipfile.ZipFile(train) as bundle, bundle.open(member(train, "/entity_embedding.vec")) as raw:
-        for line in raw:
+        for line in tqdm(raw, desc="MIND predictions", unit="impression"):
             fields = line.decode().rstrip().split("\t")
             vectors[fields[0]] = np.asarray(fields[1:], dtype=np.float32)
     return vectors
@@ -138,7 +139,7 @@ def write_predictions(test_archive: Path, model, columns, category_by_id, popula
 def validate(test_archive: Path, prediction_file: Path, expected_limit: int = 0) -> int:
     checked = 0
     with zipfile.ZipFile(test_archive) as bundle, bundle.open(member(test_archive, BEHAVIORS_MEMBER)) as raw, prediction_file.open(encoding="utf-8") as output:
-        for source, prediction in zip(raw, output):
+        for source, prediction in tqdm(zip(raw, output), desc="Validate MIND predictions", unit="impression"):
             source_fields = source.decode("utf-8").rstrip("\n").split("\t")
             expected_id = source_fields[0]
             candidates = source_fields[4].split()

@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
+from tqdm.auto import tqdm
 
 from bm25_retrieval import InvertedBM25, query_from_history
 from build_pipeline import recency_weights
@@ -47,7 +48,7 @@ def load_article_metadata(articles_path: Path) -> tuple[dict, dict, dict, dict, 
 def load_training_popularity(train_path: Path) -> Counter:
     popularity: Counter = Counter()
     parquet = pq.ParquetFile(train_path)
-    for group in range(parquet.num_row_groups):
+    for group in tqdm(range(parquet.num_row_groups), desc="Load user histories", unit="row group"):
         for clicked in parquet.read_row_group(group, columns=["article_ids_clicked"])["article_ids_clicked"].to_pylist():
             popularity.update(str(a) for a in (clicked or []))
     return popularity
@@ -99,7 +100,7 @@ def write_predictions(test_path: Path, model, columns, category_by_id, topics_by
     parquet = pq.ParquetFile(test_path)
     with prediction_file.open("w") as output:
         stop = False
-        for group in range(parquet.num_row_groups):
+        for group in tqdm(range(parquet.num_row_groups), desc="EB-NeRD predictions", unit="row group"):
             table = parquet.read_row_group(group, columns=["impression_id", "impression_time", "user_id", "article_ids_inview"])
             buffer_meta, buffer_rows = [], []
             for impression_id, now, user, candidates in zip(
@@ -128,7 +129,7 @@ def validate(test_path: Path, prediction_file: Path, limit: int = 0) -> int:
     with prediction_file.open() as output:
         for group in range(parquet.num_row_groups):
             table = parquet.read_row_group(group, columns=["impression_id", "article_ids_inview"])
-            for impression_id, candidates in zip(table["impression_id"].to_pylist(), table["article_ids_inview"].to_pylist()):
+            for impression_id, candidates in tqdm(zip(table["impression_id"].to_pylist(), table["article_ids_inview"].to_pylist()), total=table.num_rows, desc=f"Validate group {group + 1}", unit="impression", leave=False):
                 line = output.readline()
                 if not line:
                     return checked

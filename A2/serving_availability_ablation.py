@@ -11,9 +11,7 @@ SERVING_RISK_FEATURES = ["popularity", "semantic_score"]
 SERVING_SAFE_FEATURES = [name for name in FEATURE_NAMES if name not in SERVING_RISK_FEATURES]
 
 
-def score_with_columns(store: Path, dataset: str, limit: int, columns: list[str]) -> dict:
-    train_features = build_dataset_features(store, dataset, "train", 0)
-    valid_features = build_dataset_features(store, dataset, "validation", limit)
+def score_with_columns(train_features, valid_features, columns: list[str]) -> dict:
     model = train_model(train_features, columns)
     return score_validation(model, valid_features, columns)
 
@@ -22,8 +20,11 @@ def serving_availability_check(store: Path, dataset: str, limit: int) -> dict:
     full_columns = FEATURE_NAMES + ["bm25_score"]
     safe_columns = SERVING_SAFE_FEATURES + ["bm25_score"]
 
-    with_all_features = score_with_columns(store, dataset, limit, full_columns)
-    serving_safe_only = score_with_columns(store, dataset, limit, safe_columns)
+    train_features = build_dataset_features(store, dataset, "train", 0)
+    valid_features = build_dataset_features(store, dataset, "validation", limit)
+
+    with_all_features = score_with_columns(train_features, valid_features, full_columns)
+    serving_safe_only = score_with_columns(train_features, valid_features, safe_columns)
 
     result = {
         "dataset": dataset,

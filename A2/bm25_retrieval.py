@@ -6,6 +6,7 @@ from collections import Counter, defaultdict
 from math import log
 from pathlib import Path
 import pandas as pd
+from tqdm.auto import tqdm
 
 TOKEN = re.compile(r"\b\w+\b", re.UNICODE)
 STOPWORDS = frozenset("a an and are as at be by for from has have in is it of on or that the to was were with".split())
@@ -59,7 +60,7 @@ def evaluate(store: Path, dataset: str, split: str, recent: int, limit: int) -> 
     ids = articles.article_id.astype(str).tolist(); title_by_id = dict(zip(ids, articles.title.fillna("")))
     text = (articles.title.fillna("") + " " + articles.abstract.fillna("")).tolist(); index = InvertedBM25(ids, text)
     sums = {50: 0.0, 100: 0.0, 200: 0.0}; evaluated = 0
-    for _, row in impressions.iterrows():
+    for _, row in tqdm(impressions.iterrows(), total=len(impressions), desc=f"BM25 {dataset}", unit="impression"):
         clicked = {str(article) for article in row.clicked_ids}
         history = [str(article) for article in row.history_ids]
         query = query_from_history(history, title_by_id, recent)

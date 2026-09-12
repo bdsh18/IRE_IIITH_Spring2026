@@ -41,7 +41,7 @@ step() { echo; echo "=== $1 ==="; }
 
 if [[ "$SKIP_INSTALL" == false ]]; then
   step "0. Installing dependencies"
-  pip install lightgbm pyarrow --break-system-packages -q
+  pip install lightgbm pyarrow tqdm --break-system-packages -q
 fi
 
 step "1. Rebuilding the feature store (build_pipeline.py)"

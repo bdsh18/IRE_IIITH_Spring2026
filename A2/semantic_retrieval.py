@@ -5,6 +5,7 @@ import argparse, json, zipfile
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 from features import weighted_user_vector
 
@@ -49,7 +50,7 @@ def ebnerd_embeddings(source: Path, article_ids: list[str]) -> tuple[list[str], 
 
 def retrieval_metrics(emb_ids: list[str], vectors: np.ndarray, impressions: pd.DataFrame) -> dict[str, object]:
     position = {article: i for i, article in enumerate(emb_ids)}; values = {50: [], 100: [], 200: []}; evaluated = 0
-    for row in impressions.itertuples(index=False):
+    for row in tqdm(impressions.itertuples(index=False), total=len(impressions), desc="Semantic retrieval", unit="impression"):
         history = [position[str(x)] for x in row.history_ids if str(x) in position]
         clicked = {str(x) for x in row.clicked_ids}
         if not history or not clicked: continue
