@@ -91,21 +91,30 @@ def topic_affinity(history_ids: list, history_weights: list, topics_by_id: dict[
     return sum(topic_weights[t] for t in candidate_topics) / (strongest * len(candidate_topics))
 
 
-def semantic_score(history_ids: list, history_weights: list, positions: dict[str, int] | None, vectors: np.ndarray | None, candidate_id: str) -> float:
-    if positions is None or vectors is None or candidate_id not in positions:
-        return 0.0
+def weighted_user_vector(history_ids: list, history_weights: list, positions: dict[str, int] | None, vectors: np.ndarray | None) -> np.ndarray | None:
+    if positions is None or vectors is None:
+        return None
     indices, article_weights = [], []
     for article, weight in zip(history_ids, history_weights):
         position = positions.get(str(article))
         if position is not None:
             indices.append(position); article_weights.append(weight)
     if not indices:
-        return 0.0
+        return None
     user_vector = (vectors[indices] * np.asarray(article_weights)[:, None]).sum(axis=0)
     norm = float(np.linalg.norm(user_vector))
     if norm < 1e-12:
+        return None
+    return user_vector / norm
+
+
+def semantic_score(history_ids: list, history_weights: list, positions: dict[str, int] | None, vectors: np.ndarray | None, candidate_id: str) -> float:
+    if positions is None or vectors is None or candidate_id not in positions:
         return 0.0
-    return float(vectors[positions[candidate_id]] @ (user_vector / norm))
+    user_vector = weighted_user_vector(history_ids, history_weights, positions, vectors)
+    if user_vector is None:
+        return 0.0
+    return float(vectors[positions[candidate_id]] @ user_vector)
 
 
 def article_metadata(articles: pd.DataFrame) -> tuple[dict[str, str], dict[str, tuple], dict[str, object]]:

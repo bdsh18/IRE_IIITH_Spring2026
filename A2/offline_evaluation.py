@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from bm25_retrieval import InvertedBM25, query_from_history
+from features import weighted_user_vector
 from reranker import FEATURE_NAMES as RERANKER_FEATURES, build_dataset_features, train_model
 
 def auc(scores, labels):
@@ -84,9 +85,8 @@ def evaluate_dataset(store: Path, dataset: str, limit: int):
     popularity_median = catalog_popularity_median(popularity, ids)
     def lexical(row, candidates): return bm25.candidate_scores(query_from_history(row.history_ids, titles, 5), candidates)
     def semantic(row, candidates):
-        history = [positions[str(x)] for x in row.history_ids if str(x) in positions]
-        if not history: return {x: 0.0 for x in candidates}
-        user = vectors[history].mean(axis=0); user /= max(float(np.linalg.norm(user)), 1e-12)
+        user = weighted_user_vector(row.history_ids, row.history_recency_weights, positions, vectors)
+        if user is None: return {x: 0.0 for x in candidates}
         return {x: float(vectors[positions[x]] @ user) if x in positions else 0.0 for x in candidates}
     reranker_lookup = reranker_scores(store, dataset, limit)
     def reranked(row, candidates):
