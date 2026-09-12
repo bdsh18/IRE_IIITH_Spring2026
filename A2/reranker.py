@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 from bm25_retrieval import InvertedBM25, query_from_history
 from features import FEATURE_NAMES, build_features
@@ -28,7 +29,8 @@ def attach_bm25_scores(store: Path, dataset: str, split: str, features: pd.DataF
     history_by_impression = dict(zip(impressions.impression_id, impressions.history_ids))
 
     records = []
-    for impression_id, group in features.groupby("impression_id", sort=False):
+    groups = features.groupby("impression_id", sort=False)
+    for impression_id, group in tqdm(groups, total=groups.ngroups, desc=f"BM25 features {dataset}/{split}", unit="impression"):
         history = history_by_impression.get(impression_id, [])
         query = query_from_history(list(history), titles, 5)
         candidate_scores = index.candidate_scores(query, group.article_id.tolist())
@@ -53,9 +55,9 @@ def train_model(train_features: pd.DataFrame, columns: list[str]) -> LGBMRanker:
 
 
 def score_validation(model: LGBMRanker, valid_features: pd.DataFrame, columns: list[str]) -> dict[str, dict]:
-    """Returns {impression_id: {"labels": [...], "bm25_score": [...], "model_score": [...]}}"""
     per_impression = {}
-    for impression_id, group in valid_features.groupby("impression_id", sort=False):
+    groups = valid_features.groupby("impression_id", sort=False)
+    for impression_id, group in tqdm(groups, total=groups.ngroups, desc="Scoring validation", unit="impression"):
         per_impression[impression_id] = {
             "labels": group.label.tolist(),
             "bm25_score": group.bm25_score.tolist(),
@@ -78,11 +80,18 @@ def summarize(per_impression: dict[str, dict]) -> dict:
 
 
 def build_dataset_features(store: Path, dataset: str, split: str, limit: int) -> pd.DataFrame:
+    cache_path = store / dataset / f"{split}_features_with_bm25.parquet"
+    if limit == 0 and cache_path.exists():
+        return pd.read_parquet(cache_path)
     features = build_features(store, dataset, split)
     if limit:
         keep = features.impression_id.drop_duplicates().head(limit)
         features = features[features.impression_id.isin(keep)]
-    return attach_bm25_scores(store, dataset, split, features)
+    result = attach_bm25_scores(store, dataset, split, features)
+    if limit == 0:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        result.to_parquet(cache_path, index=False)
+    return result
 
 
 def run(store: Path, dataset: str, limit: int) -> tuple[dict, LGBMRanker, list[str]]:

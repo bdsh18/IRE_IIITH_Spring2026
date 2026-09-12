@@ -4,6 +4,7 @@ from collections import Counter
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 from bm25_retrieval import InvertedBM25, query_from_history
 from features import weighted_user_vector
 from reranker import FEATURE_NAMES as RERANKER_FEATURES, build_dataset_features, train_model
@@ -45,7 +46,7 @@ def run_method(name, rows, score_fn, vectors, positions, popularity, catalog_siz
     slice_names = ["cold_history_under_5", "warm_history_5_or_more", "head_popularity", "tail_popularity"]
     slice_values = {slice_name: {key: [] for key in metric_values} for slice_name in slice_names}
     total_clicks = max(sum(popularity.values()), 1)
-    for row in rows.itertuples(index=False):
+    for row in tqdm(rows.itertuples(index=False), total=len(rows), desc=f"Evaluate {name}", unit="impression"):
         candidates = [str(x) for x in row.candidate_ids]; clicked = {str(x) for x in row.clicked_ids}
         if not clicked: continue
         scores = score_fn(row, candidates); ranked = sorted(candidates, key=lambda x: -scores.get(x, float("-inf"))); top = ranked[:10]

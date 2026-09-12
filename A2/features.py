@@ -6,6 +6,7 @@ from pathlib import Path
 import math
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 FEATURE_NAMES = [
     "category_affinity",
@@ -36,7 +37,7 @@ def train_popularity(train_impressions: pd.DataFrame) -> Counter:
 
 def causal_click_times(impressions: pd.DataFrame) -> dict[str, list]:
     click_times: dict[str, list] = defaultdict(list)
-    for row in impressions.itertuples(index=False):
+    for row in tqdm(impressions.itertuples(index=False), total=len(impressions), desc=f"Features {dataset}/{split}", unit="impression"):
         for article in row.clicked_ids:
             click_times[str(article)].append(row.timestamp)
     for times in click_times.values():
