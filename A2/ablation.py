@@ -7,7 +7,7 @@ import numpy as np
 
 from features import FEATURE_NAMES
 from mind_personalized_ranker import metrics
-from reranker import build_dataset_features, rank_from_scores, run, score_validation, train_model
+from reranker import build_dataset_features, rank_from_scores, score_validation, train_model
 
 METRIC_NAMES = ["auc", "mrr", "ndcg@5", "ndcg@10"]
 IMPROVEMENT_FEATURE = "freshness_hours_inv"
@@ -34,40 +34,28 @@ def paired_bootstrap(baseline: dict[str, float], improved: dict[str, float], sam
         "ci95_high": round(high, 6),
         "excludes_zero": bool(low > 0 or high < 0),
     }
-
-
-def ablate(store: Path, dataset: str, limit: int) -> dict:
-    columns = FEATURE_NAMES + ["bm25_score"]
-    train_features = build_dataset_features(store, dataset, "train", 0)
+def score_with_columns(store: Path, dataset: str, limit: int, columns: list[str], train_features=None) -> dict:
+    if train_features is None:
+        train_features = build_dataset_features(store, dataset, "train", 0)
     valid_features = build_dataset_features(store, dataset, "validation", limit)
     model = train_model(train_features, columns)
-    per_impression = score_validation(model, valid_features, columns)
+    return score_validation(model, valid_features, columns)
 
-    result = {"dataset": dataset, "impressions": len(per_impression), "metrics": {}}
+
+def ablate_from_scores(per_impression: dict) -> dict:
+    result = {"impressions": len(per_impression), "metrics": {}}
     for index, name in enumerate(METRIC_NAMES):
         baseline = per_impression_metric_series(per_impression, "bm25_score", index)
         improved = per_impression_metric_series(per_impression, "model_score", index)
         result["metrics"][name] = paired_bootstrap(baseline, improved)
     return result
 
-def score_with_columns(store: Path, dataset: str, limit: int, columns: list[str]) -> dict:
-    train_features = build_dataset_features(store, dataset, "train", 0)
-    valid_features = build_dataset_features(store, dataset, "validation", limit)
-    model = train_model(train_features, columns)
-    return score_validation(model, valid_features, columns)
 
-
-def improvement_ablation(store: Path, dataset: str, limit: int) -> dict:
-    with_feature = FEATURE_NAMES + ["bm25_score"]
-    without_feature = [name for name in FEATURE_NAMES if name != IMPROVEMENT_FEATURE] + ["bm25_score"]
-
-    baseline_scores = score_with_columns(store, dataset, limit, without_feature)
-    improved_scores = score_with_columns(store, dataset, limit, with_feature)
-
-    result = {"dataset": dataset, "improvement_feature": IMPROVEMENT_FEATURE, "metrics": {}}
+def improvement_ablation_from_scores(full_scores: dict, without_feature_scores: dict) -> dict:
+    result = {"improvement_feature": IMPROVEMENT_FEATURE, "metrics": {}}
     for index, name in enumerate(METRIC_NAMES):
-        baseline = per_impression_metric_series(baseline_scores, "model_score", index)
-        improved = per_impression_metric_series(improved_scores, "model_score", index)
+        baseline = per_impression_metric_series(without_feature_scores, "model_score", index)
+        improved = per_impression_metric_series(full_scores, "model_score", index)
         result["metrics"][name] = paired_bootstrap(baseline, improved)
     return result
 
@@ -80,10 +68,18 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("outputs/q3_ablation.json"))
     args = parser.parse_args()
 
+    full_columns = FEATURE_NAMES + ["bm25_score"]
+    without_feature_columns = [name for name in FEATURE_NAMES if name != IMPROVEMENT_FEATURE] + ["bm25_score"]
+
+    train_features = build_dataset_features(args.store, args.dataset, "train", 0)
+
+    full_scores = score_with_columns(args.store, args.dataset, args.limit, full_columns, train_features)
+    without_feature_scores = score_with_columns(args.store, args.dataset, args.limit, without_feature_columns, train_features)
+
     result = {
         "dataset": args.dataset,
-        "reranker_vs_bm25": ablate(args.store, args.dataset, args.limit),
-        "feature_ablation": improvement_ablation(args.store, args.dataset, args.limit),
+        "reranker_vs_bm25": {"dataset": args.dataset, **ablate_from_scores(full_scores)},
+        "feature_ablation": {"dataset": args.dataset, **improvement_ablation_from_scores(full_scores, without_feature_scores)},
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2))

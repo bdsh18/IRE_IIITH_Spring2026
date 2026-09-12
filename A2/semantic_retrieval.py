@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from features import weighted_user_vector
+
 def normalize(vectors: np.ndarray) -> np.ndarray:
     return vectors / np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
 
@@ -51,7 +53,8 @@ def retrieval_metrics(emb_ids: list[str], vectors: np.ndarray, impressions: pd.D
         history = [position[str(x)] for x in row.history_ids if str(x) in position]
         clicked = {str(x) for x in row.clicked_ids}
         if not history or not clicked: continue
-        user = vectors[history].mean(axis=0); user /= max(float(np.linalg.norm(user)), 1e-12)
+        user = weighted_user_vector(row.history_ids, row.history_recency_weights, position, vectors)
+        if user is None: continue
         with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
             scores = vectors @ user
         scores = np.nan_to_num(scores, nan=-np.inf, posinf=1.0, neginf=-np.inf); scores[history] = -np.inf
