@@ -1,0 +1,68 @@
+{
+  "dataset": "mind",
+  "corpus_size": {
+    "catalog_articles": 65238,
+    "raw_title_abstract_bytes": 17973603,
+    "bm25_avg_doc_length_tokens": 34.11,
+    "train_impressions": 126690,
+    "validation_impressions": 30269,
+    "test_impressions": 73158
+  },
+  "index_size": {
+    "bm25_vocabulary_terms": 60922,
+    "bm25_total_postings": 1842137,
+    "bm25_postings_bytes_approx": 103159672,
+    "bm25_index_build_seconds": 1.5082,
+    "bm25_index_throughput_docs_per_sec": 43254.4,
+    "embedding_dimensions": 100,
+    "embedding_index_bytes_in_memory": 22461600,
+    "embedding_index_bytes_on_disk_compressed": 20810308,
+    "embedding_index_load_seconds": 0.1308,
+    "embedding_index_load_throughput_vectors_per_sec": 429436.2
+  },
+  "feature_store_size": {
+    "parquet_bytes_on_disk": 56545307,
+    "validation_feature_rows": 1222481,
+    "feature_table_bytes_in_memory_per_1k_rows": 119133
+  },
+  "latency_end_to_end_lexical_plus_rerank": {
+    "n_requests": 300,
+    "benchmark_wall_seconds": 67.043,
+    "measured_single_process_qps": 4.47,
+    "p50_ms": 232.457,
+    "p95_ms": 263.411,
+    "p99_ms": 279.951,
+    "mean_ms": 223.28,
+    "avg_query_length_tokens": 51.31,
+    "avg_candidates_retrieved": 190.0,
+    "littles_law_check": {
+      "N_concurrent_requests": 1,
+      "predicted_qps_1_over_mean_latency": 4.48,
+      "measured_qps": 4.47,
+      "holds": true
+    }
+  },
+  "latency_semantic_scoring_only": {
+    "n_requests": 300,
+    "measured_single_process_qps": 84.51,
+    "p50_ms": 11.939,
+    "p95_ms": 17.954,
+    "p99_ms": 28.08,
+    "mean_ms": 11.714
+  },
+  "cost_estimate": {
+    "measured_p99_ms": 279.951,
+    "target_sla_ms": 100.0,
+    "meets_sla_single_machine": false,
+    "assumed_single_machine_qps": 4.47,
+    "target_qps": 1000,
+    "machines_needed": 224,
+    "estimated_cost_per_hour_usd": 112.0
+  },
+  "ten_x_scaling_notes": [
+    "BM25 postings and the brute-force cosine embedding index both live in a single process; at 10x catalog size the embedding index needs FAISS/HNSW ANN rather than a full matrix-vector product per request.",
+    "Feature build currently re-reads the full history/popularity tables per process; at 10x traffic this needs a precomputed, versioned feature store (e.g. Feast/Redis) instead of in-request pandas joins.",
+    "The GBDT model.predict call is the main per-request cost once candidates are pooled \u2014 batching requests or moving to a served model endpoint (Triton/TorchServe) amortizes this at higher QPS.",
+    "Throughput above is single-process and sequential; real serving needs concurrent workers (multiprocessing or async I/O) \u2014 measured_single_process_qps is a per-worker floor, not a ceiling."
+  ]
+}

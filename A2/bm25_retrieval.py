@@ -70,10 +70,37 @@ def evaluate(store: Path, dataset: str, split: str, recent: int, limit: int) -> 
         evaluated += 1
     return {"dataset": dataset, "split": split, "retrieval_corpus_articles": len(ids), "evaluated_impressions": evaluated, "history_articles_used": recent, **{f"recall@{k}": sums[k] / evaluated if evaluated else 0.0 for k in sums}}
 
+def candidate_generator_coverage(store: Path, dataset: str, split: str, recent: int, k: int, limit: int) -> dict[str, object]:
+    articles = pd.read_parquet(store / dataset / "articles.parquet")
+    impressions = pd.read_parquet(store / dataset / f"{split}_impressions.parquet")
+    if limit: impressions = impressions.head(limit)
+    ids = articles.article_id.astype(str).tolist()
+    title_by_id = dict(zip(ids, articles.title.fillna("")))
+    text = (articles.title.fillna("") + " " + articles.abstract.fillna("")).tolist()
+    index = InvertedBM25(ids, text)
+    covered, total_candidates, evaluated = 0, 0, 0
+    for _, row in tqdm(impressions.iterrows(), total=len(impressions), desc=f"Coverage {dataset}", unit="impression"):
+        history = [str(article) for article in row.history_ids]
+        query = query_from_history(history, title_by_id, recent)
+        candidates = {str(c) for c in row.candidate_ids}
+        if not query or not candidates: continue
+        retrieved = set(index.search(query, k))
+        covered += len(candidates & retrieved)
+        total_candidates += len(candidates)
+        evaluated += 1
+    return {
+        "dataset": dataset, "split": split, "k": k, "evaluated_impressions": evaluated,
+        "candidate_set_coverage": covered / total_candidates if total_candidates else 0.0,
+    }
+
 def main() -> None:
-    parser = argparse.ArgumentParser(); parser.add_argument("--store", type=Path, default=Path("data/processed")); parser.add_argument("--split", default="validation", choices=["validation", "test"]); parser.add_argument("--recent-history", type=int, default=5); parser.add_argument("--limit", type=int, default=0, help="0 evaluates the complete selected split"); parser.add_argument("--output", type=Path, default=Path("outputs/q2_bm25_metrics.json")); args = parser.parse_args()
+    parser = argparse.ArgumentParser(); parser.add_argument("--store", type=Path, default=Path("data/processed")); parser.add_argument("--split", default="validation", choices=["validation", "test"]); parser.add_argument("--recent-history", type=int, default=5); parser.add_argument("--k", type=int, default=150); parser.add_argument("--limit", type=int, default=0, help="0 evaluates the complete selected split"); parser.add_argument("--output", type=Path, default=Path("outputs/q2_bm25_metrics.json")); parser.add_argument("--coverage-output", type=Path, default=Path("outputs/q2_candidate_coverage.json")); args = parser.parse_args()
     results = [evaluate(args.store, dataset, args.split, args.recent_history, args.limit) for dataset in ("mind", "ebnerd")]
     args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_text(json.dumps(results, indent=2))
     for result in results: print(result)
 
+    coverage = [candidate_generator_coverage(args.store, dataset, args.split, args.recent_history, args.k, args.limit) for dataset in ("mind", "ebnerd")]
+    args.coverage_output.parent.mkdir(parents=True, exist_ok=True); args.coverage_output.write_text(json.dumps(coverage, indent=2))
+    for result in coverage: print(result)
+    
 if __name__ == "__main__": main()

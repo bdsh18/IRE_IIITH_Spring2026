@@ -2,7 +2,6 @@
 *.pt
 *.ckpt
 data/
-outputs/
 __pycache__/
 *.pyc
 .pytest_cache/

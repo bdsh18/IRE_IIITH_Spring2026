@@ -1,0 +1,117 @@
+{
+  "dataset": "ebnerd",
+  "reranker_vs_bm25": {
+    "dataset": "ebnerd",
+    "impressions": 3962,
+    "metrics": {
+      "auc": {
+        "baseline_mean": 0.499334,
+        "improved_mean": 0.651238,
+        "delta_mean": 0.151904,
+        "ci95_low": 0.13998,
+        "ci95_high": 0.164993,
+        "excludes_zero": true
+      },
+      "mrr": {
+        "baseline_mean": 0.313746,
+        "improved_mean": 0.405936,
+        "delta_mean": 0.092191,
+        "ci95_low": 0.080785,
+        "ci95_high": 0.10314,
+        "excludes_zero": true
+      },
+      "ndcg@5": {
+        "baseline_mean": 0.344958,
+        "improved_mean": 0.455624,
+        "delta_mean": 0.110666,
+        "ci95_low": 0.09829,
+        "ci95_high": 0.12295,
+        "excludes_zero": true
+      },
+      "ndcg@10": {
+        "baseline_mean": 0.428994,
+        "improved_mean": 0.521474,
+        "delta_mean": 0.09248,
+        "ci95_low": 0.082463,
+        "ci95_high": 0.102152,
+        "excludes_zero": true
+      }
+    }
+  },
+  "reranker_vs_official_baseline": {
+    "dataset": "ebnerd",
+    "baseline": "most_popular",
+    "metrics": {
+      "auc": {
+        "baseline_mean": 0.467231,
+        "improved_mean": 0.651238,
+        "delta_mean": 0.184007,
+        "ci95_low": 0.170975,
+        "ci95_high": 0.196584,
+        "excludes_zero": true
+      },
+      "mrr": {
+        "baseline_mean": 0.28717,
+        "improved_mean": 0.405936,
+        "delta_mean": 0.118766,
+        "ci95_low": 0.107525,
+        "ci95_high": 0.129857,
+        "excludes_zero": true
+      },
+      "ndcg@5": {
+        "baseline_mean": 0.311729,
+        "improved_mean": 0.455624,
+        "delta_mean": 0.143895,
+        "ci95_low": 0.131749,
+        "ci95_high": 0.155596,
+        "excludes_zero": true
+      },
+      "ndcg@10": {
+        "baseline_mean": 0.408181,
+        "improved_mean": 0.521474,
+        "delta_mean": 0.113293,
+        "ci95_low": 0.103688,
+        "ci95_high": 0.122651,
+        "excludes_zero": true
+      }
+    }
+  },
+  "feature_ablation": {
+    "dataset": "ebnerd",
+    "improvement_feature": "freshness_hours_inv",
+    "metrics": {
+      "auc": {
+        "baseline_mean": 0.520701,
+        "improved_mean": 0.651238,
+        "delta_mean": 0.130537,
+        "ci95_low": 0.12172,
+        "ci95_high": 0.139913,
+        "excludes_zero": true
+      },
+      "mrr": {
+        "baseline_mean": 0.316425,
+        "improved_mean": 0.405936,
+        "delta_mean": 0.089512,
+        "ci95_low": 0.081035,
+        "ci95_high": 0.097954,
+        "excludes_zero": true
+      },
+      "ndcg@5": {
+        "baseline_mean": 0.34907,
+        "improved_mean": 0.455624,
+        "delta_mean": 0.106554,
+        "ci95_low": 0.097404,
+        "ci95_high": 0.115846,
+        "excludes_zero": true
+      },
+      "ndcg@10": {
+        "baseline_mean": 0.434767,
+        "improved_mean": 0.521474,
+        "delta_mean": 0.086707,
+        "ci95_low": 0.079179,
+        "ci95_high": 0.094063,
+        "excludes_zero": true
+      }
+    }
+  }
+}

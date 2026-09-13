@@ -1,0 +1,79 @@
+{
+  "dataset": "mind",
+  "reranker_vs_bm25": {
+    "dataset": "mind",
+    "impressions": 30269,
+    "metrics": {
+      "auc": {
+        "baseline_mean": 0.543002,
+        "improved_mean": 0.589701,
+        "delta_mean": 0.046699,
+        "ci95_low": 0.04277,
+        "ci95_high": 0.050547,
+        "excludes_zero": true
+      },
+      "mrr": {
+        "baseline_mean": 0.282822,
+        "improved_mean": 0.300765,
+        "delta_mean": 0.017943,
+        "ci95_low": 0.015067,
+        "ci95_high": 0.020832,
+        "excludes_zero": true
+      },
+      "ndcg@5": {
+        "baseline_mean": 0.25461,
+        "improved_mean": 0.275608,
+        "delta_mean": 0.020998,
+        "ci95_low": 0.018053,
+        "ci95_high": 0.024032,
+        "excludes_zero": true
+      },
+      "ndcg@10": {
+        "baseline_mean": 0.310689,
+        "improved_mean": 0.335316,
+        "delta_mean": 0.024627,
+        "ci95_low": 0.021934,
+        "ci95_high": 0.027385,
+        "excludes_zero": true
+      }
+    }
+  },
+  "feature_ablation": {
+    "dataset": "mind",
+    "improvement_feature": "freshness_hours_inv",
+    "metrics": {
+      "auc": {
+        "baseline_mean": 0.589701,
+        "improved_mean": 0.589701,
+        "delta_mean": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "excludes_zero": false
+      },
+      "mrr": {
+        "baseline_mean": 0.300765,
+        "improved_mean": 0.300765,
+        "delta_mean": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "excludes_zero": false
+      },
+      "ndcg@5": {
+        "baseline_mean": 0.275608,
+        "improved_mean": 0.275608,
+        "delta_mean": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "excludes_zero": false
+      },
+      "ndcg@10": {
+        "baseline_mean": 0.335316,
+        "improved_mean": 0.335316,
+        "delta_mean": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "excludes_zero": false
+      }
+    }
+  }
+}

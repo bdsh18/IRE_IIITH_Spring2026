@@ -1,0 +1,50 @@
+[
+  {
+    "dataset": "mind",
+    "embedding_articles": 56154,
+    "embedding_dimensions": 100,
+    "index": "brute-force cosine ANN baseline",
+    "evaluated_impressions": 29404,
+    "recall@50": 0.003431451935056887,
+    "recall@100": 0.006210957153005854,
+    "recall@200": 0.01047464510428733,
+    "slices": {
+      "cold_history_under_5": {
+        "evaluated_impressions": 3156,
+        "recall@50": 0.004964089564850021,
+        "recall@100": 0.009093789607097592,
+        "recall@200": 0.01511406844106464
+      },
+      "warm_history_5_or_more": {
+        "evaluated_impressions": 26248,
+        "recall@50": 0.0032471710618617055,
+        "recall@100": 0.005864331915840602,
+        "recall@200": 0.009916811362635806
+      }
+    }
+  },
+  {
+    "dataset": "ebnerd",
+    "embedding_articles": 11777,
+    "embedding_dimensions": 300,
+    "index": "brute-force cosine ANN baseline",
+    "evaluated_impressions": 3962,
+    "recall@50": 0.008329126703685007,
+    "recall@100": 0.013881877839475013,
+    "recall@200": 0.027637556789500254,
+    "slices": {
+      "cold_history_under_5": {
+        "evaluated_impressions": 0,
+        "recall@50": 0.0,
+        "recall@100": 0.0,
+        "recall@200": 0.0
+      },
+      "warm_history_5_or_more": {
+        "evaluated_impressions": 3962,
+        "recall@50": 0.008329126703685007,
+        "recall@100": 0.013881877839475013,
+        "recall@200": 0.027637556789500254
+      }
+    }
+  }
+]

@@ -1,0 +1,42 @@
+{
+  "dataset": "ebnerd",
+  "dropped_features": [
+    "popularity",
+    "semantic_score"
+  ],
+  "reason": "both depend on a batch-refreshed index (train click popularity, article_embeddings.npz) that lags for brand-new articles until the next offline refresh job runs",
+  "metrics": {
+    "auc": {
+      "baseline_mean": 0.704966,
+      "improved_mean": 0.651238,
+      "delta_mean": -0.053728,
+      "ci95_low": -0.062557,
+      "ci95_high": -0.04549,
+      "excludes_zero": true
+    },
+    "mrr": {
+      "baseline_mean": 0.460667,
+      "improved_mean": 0.405936,
+      "delta_mean": -0.05473,
+      "ci95_low": -0.064766,
+      "ci95_high": -0.044908,
+      "excludes_zero": true
+    },
+    "ndcg@5": {
+      "baseline_mean": 0.52045,
+      "improved_mean": 0.455624,
+      "delta_mean": -0.064826,
+      "ci95_low": -0.074818,
+      "ci95_high": -0.054944,
+      "excludes_zero": true
+    },
+    "ndcg@10": {
+      "baseline_mean": 0.569806,
+      "improved_mean": 0.521474,
+      "delta_mean": -0.048332,
+      "ci95_low": -0.056764,
+      "ci95_high": -0.04026,
+      "excludes_zero": true
+    }
+  }
+}
