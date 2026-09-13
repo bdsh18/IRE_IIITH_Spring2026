@@ -62,19 +62,24 @@ for DATASET in mind ebnerd; do
 
   step "6. Q2 re-ranker — $DATASET"
   if [[ "$SMOKE_LIMIT" -gt 0 ]]; then
-    python reranker.py --dataset "$DATASET" --store "$STORE" --limit "$SMOKE_LIMIT"
+    python reranker.py --dataset "$DATASET" --store "$STORE" --limit "$SMOKE_LIMIT" \
+      --output "outputs/q2_reranker_metrics_${DATASET}.json"
   else
-    python reranker.py --dataset "$DATASET" --store "$STORE"
+    python reranker.py --dataset "$DATASET" --store "$STORE" \
+      --output "outputs/q2_reranker_metrics_${DATASET}.json"
   fi
 
   step "7. Q3 ablation (paired bootstrap) — $DATASET"
-  python ablation.py --dataset "$DATASET" --store "$STORE" --limit "$SMOKE_LIMIT"
+  python ablation.py --dataset "$DATASET" --store "$STORE" --limit "$SMOKE_LIMIT" \
+    --output "outputs/q3_ablation_${DATASET}.json"
 
   step "8. Q4 serving & scale — $DATASET"
-  python serving_scale.py --dataset "$DATASET" --store "$STORE" --target-sla-ms 100
+  python serving_scale.py --dataset "$DATASET" --store "$STORE" --target-sla-ms 100 \
+    --output "outputs/q4_serving_scale_${DATASET}.json"
 
   step "9. Q9 serving-availability ablation — $DATASET"
-  python serving_availability_ablation.py --dataset "$DATASET" --store "$STORE" --limit "$SMOKE_LIMIT"
+  python serving_availability_ablation.py --dataset "$DATASET" --store "$STORE" --limit "$SMOKE_LIMIT" \
+    --output "outputs/q9_serving_availability_${DATASET}.json"
 done
 
 step "10. Q5 extended evaluation — both datasets, all metrics + slices"
@@ -92,8 +97,12 @@ fi
 
 step "Done"
 echo "Results:"
-echo "  outputs/q2_reranker_metrics.json"
-echo "  outputs/q3_ablation.json"
-echo "  outputs/q4_serving_scale.json"
+echo "  outputs/q2_reranker_metrics_mind.json"
+echo "  outputs/q2_reranker_metrics_ebnerd.json"
+echo "  outputs/q3_ablation_mind.json"
+echo "  outputs/q3_ablation_ebnerd.json"
+echo "  outputs/q4_serving_scale_mind.json"
+echo "  outputs/q4_serving_scale_ebnerd.json"
 echo "  outputs/q5_evaluation.json"
-echo "  outputs/q9_serving_availability.json"
+echo "  outputs/q9_serving_availability_mind.json"
+echo "  outputs/q9_serving_availability_ebnerd.json"
