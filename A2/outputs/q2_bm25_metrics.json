@@ -1,0 +1,22 @@
+[
+  {
+    "dataset": "mind",
+    "split": "validation",
+    "retrieval_corpus_articles": 65238,
+    "evaluated_impressions": 29498,
+    "history_articles_used": 5,
+    "recall@50": 0.013476634559419814,
+    "recall@100": 0.02151608110062923,
+    "recall@200": 0.032194824991794345
+  },
+  {
+    "dataset": "ebnerd",
+    "split": "validation",
+    "retrieval_corpus_articles": 11777,
+    "evaluated_impressions": 3962,
+    "history_articles_used": 5,
+    "recall@50": 0.009591115598182737,
+    "recall@100": 0.016153457849570924,
+    "recall@200": 0.03054013124684503
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "dataset": "ebnerd",
+  "before_bm25_only": {
+    "auc": 0.499334,
+    "mrr": 0.313746,
+    "ndcg@5": 0.344958,
+    "ndcg@10": 0.428994
+  },
+  "after_reranked": {
+    "auc": 0.651238,
+    "mrr": 0.405936,
+    "ndcg@5": 0.455624,
+    "ndcg@10": 0.521474
+  },
+  "impressions": 3962
+}

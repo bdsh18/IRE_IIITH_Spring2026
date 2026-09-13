@@ -1,0 +1,16 @@
+{
+  "dataset": "mind",
+  "before_bm25_only": {
+    "auc": 0.543002,
+    "mrr": 0.282822,
+    "ndcg@5": 0.25461,
+    "ndcg@10": 0.310689
+  },
+  "after_reranked": {
+    "auc": 0.589701,
+    "mrr": 0.300765,
+    "ndcg@5": 0.275608,
+    "ndcg@10": 0.335316
+  },
+  "impressions": 30269
+}

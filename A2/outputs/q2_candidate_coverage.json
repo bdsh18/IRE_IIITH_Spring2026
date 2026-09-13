@@ -1,0 +1,16 @@
+[
+  {
+    "dataset": "mind",
+    "split": "validation",
+    "k": 150,
+    "evaluated_impressions": 29498,
+    "candidate_set_coverage": 0.008146424214763569
+  },
+  {
+    "dataset": "ebnerd",
+    "split": "validation",
+    "k": 150,
+    "evaluated_impressions": 3962,
+    "candidate_set_coverage": 0.016432940013591153
+  }
+]

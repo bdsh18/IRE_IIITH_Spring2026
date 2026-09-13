@@ -17,6 +17,7 @@ from features import (
     train_popularity,
     user_session_click_count,
     user_session_order,
+    weighted_user_vector,
 )
 from reranker import build_dataset_features, train_model
 
@@ -25,7 +26,9 @@ def corpus_and_index_size(store: Path, dataset: str) -> dict:
     articles = pd.read_parquet(store / dataset / "articles.parquet")
     ids = articles.article_id.astype(str).tolist()
     text = (articles.title.fillna("") + " " + articles.abstract.fillna("")).tolist()
+    index_build_start = time.perf_counter()
     index = InvertedBM25(ids, text)
+    bm25_index_seconds = time.perf_counter() - index_build_start
 
     def parquet_path(split: str) -> Path:
         return store / dataset / f"{split}_impressions.parquet"
@@ -38,16 +41,19 @@ def corpus_and_index_size(store: Path, dataset: str) -> dict:
         return path.stat().st_size if path.exists() else 0
 
     corpus_text_bytes = sum(len(t.encode("utf-8")) for t in text)
-    postings_bytes_approx = sum(len(postings) for postings in index.postings.values()) * 56  # (doc_idx int64, tf float64) + object overhead, rough
+    total_postings = sum(len(postings) for postings in index.postings.values())
+    postings_bytes_approx = total_postings * 56
 
+    embedding_load_start = time.perf_counter()
     positions, vectors = load_embeddings(store, dataset)
+    embedding_load_seconds = time.perf_counter() - embedding_load_start
     embeddings_path = store / dataset / "article_embeddings.npz"
     embedding_bytes_on_disk = bytes_on_disk(embeddings_path)
     embedding_bytes_in_memory = int(vectors.nbytes) if vectors is not None else 0
 
     articles_path = store / dataset / "articles.parquet"
     feature_store_bytes_on_disk = bytes_on_disk(articles_path) + sum(bytes_on_disk(parquet_path(split)) for split in ("train", "validation", "test"))
-    from features import build_features  # local import: avoids a hard dependency for callers that only need sizing, not a full feature build
+    from features import build_features
     sample_features = build_features(store, dataset, "validation")
     feature_table_bytes_in_memory_per_1k_rows = int(sample_features.memory_usage(deep=True).sum() / max(len(sample_features), 1) * 1000)
 
@@ -55,16 +61,22 @@ def corpus_and_index_size(store: Path, dataset: str) -> dict:
         "corpus": {
             "catalog_articles": len(ids),
             "raw_title_abstract_bytes": corpus_text_bytes,
+            "bm25_avg_doc_length_tokens": round(index.average_length, 2),
             "train_impressions": count_rows("train"),
             "validation_impressions": count_rows("validation"),
             "test_impressions": count_rows("test"),
         },
         "index": {
             "bm25_vocabulary_terms": len(index.postings),
+            "bm25_total_postings": total_postings,
             "bm25_postings_bytes_approx": postings_bytes_approx,
+            "bm25_index_build_seconds": round(bm25_index_seconds, 4),
+            "bm25_index_throughput_docs_per_sec": round(len(ids) / max(bm25_index_seconds, 1e-9), 1),
             "embedding_dimensions": int(vectors.shape[1]) if vectors is not None else 0,
             "embedding_index_bytes_in_memory": embedding_bytes_in_memory,
             "embedding_index_bytes_on_disk_compressed": embedding_bytes_on_disk,
+            "embedding_index_load_seconds": round(embedding_load_seconds, 4),
+            "embedding_index_load_throughput_vectors_per_sec": round((vectors.shape[0] if vectors is not None else 0) / max(embedding_load_seconds, 1e-9), 1),
         },
         "feature_store": {
             "parquet_bytes_on_disk": feature_store_bytes_on_disk,
@@ -89,11 +101,11 @@ def latency_benchmark(store: Path, dataset: str, model, columns: list[str], repe
     max_pop = max(popularity.values(), default=1)
 
     impressions = pd.read_parquet(store / dataset / "validation_impressions.parquet")
-    session_rank = user_session_order(impressions)  # O(1) dict lookup per request below; the sort itself is a batch/offline cost, not per-request
+    session_rank = user_session_order(impressions)
     session_clicks = user_session_click_count(impressions)
     sample = impressions.sample(min(repeats, len(impressions)), random_state=0)
 
-    durations = []
+    durations, query_lengths, candidate_counts = [], [], []
     benchmark_start = time.perf_counter()
     for row in tqdm(sample.itertuples(index=False), total=len(sample), desc="Latency benchmark", unit="request"):
         start = time.perf_counter()
@@ -101,6 +113,8 @@ def latency_benchmark(store: Path, dataset: str, model, columns: list[str], repe
         weights = list(row.history_recency_weights)
         query = query_from_history(history_ids, titles, 5)
         candidates = index.search(query, 200, excluded=set(map(str, history_ids)))
+        query_lengths.append(len(query.split()))
+        candidate_counts.append(len(candidates))
         candidate_scores = index.candidate_scores(query, candidates)
         session_count = session_rank.get(str(row.impression_id), 0)
         session_click_count = session_clicks.get(str(row.impression_id), 0)
@@ -121,9 +135,49 @@ def latency_benchmark(store: Path, dataset: str, model, columns: list[str], repe
 
     durations = np.asarray(durations) if durations else np.asarray([0.0])
     measured_qps = round(len(durations) / benchmark_wall_seconds, 2) if benchmark_wall_seconds > 0 else 0.0
+    mean_seconds = float(durations.mean())
+    predicted_qps_from_littles_law = round(1 / mean_seconds, 2) if mean_seconds > 0 else 0.0
     return {
         "n_requests": len(durations),
         "benchmark_wall_seconds": round(benchmark_wall_seconds, 3),
+        "measured_single_process_qps": measured_qps,
+        "p50_ms": round(float(np.percentile(durations, 50) * 1000), 3),
+        "p95_ms": round(float(np.percentile(durations, 95) * 1000), 3),
+        "p99_ms": round(float(np.percentile(durations, 99) * 1000), 3),
+        "mean_ms": round(float(mean_seconds * 1000), 3),
+        "avg_query_length_tokens": round(float(np.mean(query_lengths)), 2) if query_lengths else 0.0,
+        "avg_candidates_retrieved": round(float(np.mean(candidate_counts)), 1) if candidate_counts else 0.0,
+        "littles_law_check": {
+            "N_concurrent_requests": 1,
+            "predicted_qps_1_over_mean_latency": predicted_qps_from_littles_law,
+            "measured_qps": measured_qps,
+            "holds": measured_qps <= predicted_qps_from_littles_law * 1.05,
+        },
+    }
+
+
+def semantic_latency_benchmark(store: Path, dataset: str, repeats: int) -> dict:
+    positions, vectors = load_embeddings(store, dataset)
+    impressions = pd.read_parquet(store / dataset / "validation_impressions.parquet")
+    sample = impressions.sample(min(repeats, len(impressions)), random_state=0)
+
+    durations = []
+    benchmark_start = time.perf_counter()
+    for row in tqdm(sample.itertuples(index=False), total=len(sample), desc="Semantic latency", unit="request"):
+        start = time.perf_counter()
+        history_ids = list(row.history_ids)
+        weights = list(row.history_recency_weights)
+        if vectors is not None:
+            user = weighted_user_vector(history_ids, weights, positions, vectors)
+            if user is not None:
+                _ = vectors @ user
+        durations.append(time.perf_counter() - start)
+    benchmark_wall_seconds = time.perf_counter() - benchmark_start
+
+    durations = np.asarray(durations) if durations else np.asarray([0.0])
+    measured_qps = round(len(durations) / benchmark_wall_seconds, 2) if benchmark_wall_seconds > 0 else 0.0
+    return {
+        "n_requests": len(durations),
         "measured_single_process_qps": measured_qps,
         "p50_ms": round(float(np.percentile(durations, 50) * 1000), 3),
         "p95_ms": round(float(np.percentile(durations, 95) * 1000), 3),
@@ -133,7 +187,7 @@ def latency_benchmark(store: Path, dataset: str, model, columns: list[str], repe
 
 
 def cost_estimate(p99_ms: float, target_sla_ms: float, single_machine_qps: float, machine_cost_per_hour: float, target_qps: int = 1000) -> dict:
-    machines_needed = int(max(1, -(-target_qps // max(single_machine_qps, 1))))  # ceil division
+    machines_needed = int(max(1, -(-target_qps // max(single_machine_qps, 1))))
     return {
         "measured_p99_ms": p99_ms,
         "target_sla_ms": target_sla_ms,
@@ -161,6 +215,7 @@ def main() -> None:
 
     size = corpus_and_index_size(args.store, args.dataset)
     latency = latency_benchmark(args.store, args.dataset, model, columns, args.limit)
+    semantic_latency = semantic_latency_benchmark(args.store, args.dataset, args.limit)
     cost = cost_estimate(latency["p99_ms"], args.target_sla_ms, latency["measured_single_process_qps"], args.machine_cost_per_hour)
 
     result = {
@@ -168,7 +223,8 @@ def main() -> None:
         "corpus_size": size["corpus"],
         "index_size": size["index"],
         "feature_store_size": size["feature_store"],
-        "latency": latency,
+        "latency_end_to_end_lexical_plus_rerank": latency,
+        "latency_semantic_scoring_only": semantic_latency,
         "cost_estimate": cost,
         "ten_x_scaling_notes": [
             "BM25 postings and the brute-force cosine embedding index both live in a single process; "

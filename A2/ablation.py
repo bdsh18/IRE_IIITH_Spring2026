@@ -2,8 +2,8 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-
 import numpy as np
+import pandas as pd
 
 from features import FEATURE_NAMES
 from mind_personalized_ranker import metrics
@@ -57,6 +57,21 @@ def improvement_ablation_from_scores(full_scores: dict, without_feature_scores: 
         result["metrics"][name] = paired_bootstrap(baseline, improved)
     return result
 
+def popularity_baseline_scores(valid_features: pd.DataFrame) -> dict[str, dict]:
+    per_impression = {}
+    for impression_id, group in valid_features.groupby("impression_id", sort=False):
+        per_impression[impression_id] = {"labels": group.label.tolist(), "popularity_score": group.popularity.tolist()}
+    return per_impression
+
+
+def official_baseline_ablation(valid_features: pd.DataFrame, full_scores: dict) -> dict:
+    popularity_scores = popularity_baseline_scores(valid_features)
+    result = {"baseline": "most_popular", "metrics": {}}
+    for index, name in enumerate(METRIC_NAMES):
+        baseline = per_impression_metric_series(popularity_scores, "popularity_score", index)
+        improved = per_impression_metric_series(full_scores, "model_score", index)
+        result["metrics"][name] = paired_bootstrap(baseline, improved)
+    return result
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -78,8 +93,10 @@ def main() -> None:
     result = {
         "dataset": args.dataset,
         "reranker_vs_bm25": {"dataset": args.dataset, **ablate_from_scores(full_scores)},
+        "reranker_vs_official_baseline": {"dataset": args.dataset, **official_baseline_ablation(valid_features, full_scores)},
         "feature_ablation": {"dataset": args.dataset, **improvement_ablation_from_scores(full_scores, without_feature_scores)},
     }
+    
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))
