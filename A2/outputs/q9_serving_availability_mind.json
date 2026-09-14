@@ -7,35 +7,35 @@
   "reason": "both depend on a batch-refreshed index (train click popularity, article_embeddings.npz) that lags for brand-new articles until the next offline refresh job runs",
   "metrics": {
     "auc": {
-      "baseline_mean": 0.575124,
+      "baseline_mean": 0.576479,
       "improved_mean": 0.589701,
-      "delta_mean": 0.014577,
-      "ci95_low": 0.011568,
-      "ci95_high": 0.017561,
+      "delta_mean": 0.013222,
+      "ci95_low": 0.010139,
+      "ci95_high": 0.016243,
       "excludes_zero": true
     },
     "mrr": {
-      "baseline_mean": 0.29504,
+      "baseline_mean": 0.295248,
       "improved_mean": 0.300765,
-      "delta_mean": 0.005725,
-      "ci95_low": 0.002986,
-      "ci95_high": 0.008416,
+      "delta_mean": 0.005517,
+      "ci95_low": 0.00288,
+      "ci95_high": 0.008197,
       "excludes_zero": true
     },
     "ndcg@5": {
-      "baseline_mean": 0.268381,
+      "baseline_mean": 0.268487,
       "improved_mean": 0.275608,
-      "delta_mean": 0.007227,
-      "ci95_low": 0.004552,
-      "ci95_high": 0.00996,
+      "delta_mean": 0.007121,
+      "ci95_low": 0.004356,
+      "ci95_high": 0.009778,
       "excludes_zero": true
     },
     "ndcg@10": {
-      "baseline_mean": 0.327007,
+      "baseline_mean": 0.32824,
       "improved_mean": 0.335316,
-      "delta_mean": 0.008308,
-      "ci95_low": 0.005765,
-      "ci95_high": 0.010601,
+      "delta_mean": 0.007075,
+      "ci95_low": 0.004629,
+      "ci95_high": 0.009571,
       "excludes_zero": true
     }
   }

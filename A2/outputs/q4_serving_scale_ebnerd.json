@@ -12,13 +12,13 @@
     "bm25_vocabulary_terms": 31585,
     "bm25_total_postings": 252056,
     "bm25_postings_bytes_approx": 14115136,
-    "bm25_index_build_seconds": 0.2654,
-    "bm25_index_throughput_docs_per_sec": 44381.2,
+    "bm25_index_build_seconds": 0.3658,
+    "bm25_index_throughput_docs_per_sec": 32192.6,
     "embedding_dimensions": 300,
     "embedding_index_bytes_in_memory": 14132400,
     "embedding_index_bytes_on_disk_compressed": 13136311,
-    "embedding_index_load_seconds": 0.0918,
-    "embedding_index_load_throughput_vectors_per_sec": 128301.6
+    "embedding_index_load_seconds": 0.0913,
+    "embedding_index_load_throughput_vectors_per_sec": 129002.6
   },
   "feature_store_size": {
     "parquet_bytes_on_disk": 44489678,
@@ -27,37 +27,37 @@
   },
   "latency_end_to_end_lexical_plus_rerank": {
     "n_requests": 300,
-    "benchmark_wall_seconds": 50.899,
-    "measured_single_process_qps": 5.89,
-    "p50_ms": 148.756,
-    "p95_ms": 338.807,
-    "p99_ms": 407.369,
-    "mean_ms": 169.483,
+    "benchmark_wall_seconds": 59.308,
+    "measured_single_process_qps": 5.06,
+    "p50_ms": 165.658,
+    "p95_ms": 414.277,
+    "p99_ms": 571.488,
+    "mean_ms": 197.353,
     "avg_query_length_tokens": 33.85,
     "avg_candidates_retrieved": 200.0,
     "littles_law_check": {
       "N_concurrent_requests": 1,
-      "predicted_qps_1_over_mean_latency": 5.9,
-      "measured_qps": 5.89,
+      "predicted_qps_1_over_mean_latency": 5.07,
+      "measured_qps": 5.06,
       "holds": true
     }
   },
   "latency_semantic_scoring_only": {
     "n_requests": 300,
-    "measured_single_process_qps": 123.42,
-    "p50_ms": 5.959,
-    "p95_ms": 14.86,
-    "p99_ms": 30.984,
-    "mean_ms": 8.015
+    "measured_single_process_qps": 35.12,
+    "p50_ms": 25.856,
+    "p95_ms": 53.32,
+    "p99_ms": 93.632,
+    "mean_ms": 28.14
   },
   "cost_estimate": {
-    "measured_p99_ms": 407.369,
+    "measured_p99_ms": 571.488,
     "target_sla_ms": 100.0,
     "meets_sla_single_machine": false,
-    "assumed_single_machine_qps": 5.89,
+    "assumed_single_machine_qps": 5.06,
     "target_qps": 1000,
-    "machines_needed": 170,
-    "estimated_cost_per_hour_usd": 85.0
+    "machines_needed": 198,
+    "estimated_cost_per_hour_usd": 99.0
   },
   "ten_x_scaling_notes": [
     "BM25 postings and the brute-force cosine embedding index both live in a single process; at 10x catalog size the embedding index needs FAISS/HNSW ANN rather than a full matrix-vector product per request.",

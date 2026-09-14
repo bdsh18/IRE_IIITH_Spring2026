@@ -38,6 +38,44 @@
       }
     }
   },
+  "reranker_vs_official_baseline": {
+    "dataset": "mind",
+    "baseline": "most_popular",
+    "metrics": {
+      "auc": {
+        "baseline_mean": 0.516605,
+        "improved_mean": 0.589701,
+        "delta_mean": 0.073096,
+        "ci95_low": 0.068598,
+        "ci95_high": 0.077593,
+        "excludes_zero": true
+      },
+      "mrr": {
+        "baseline_mean": 0.242099,
+        "improved_mean": 0.300765,
+        "delta_mean": 0.058666,
+        "ci95_low": 0.054858,
+        "ci95_high": 0.062288,
+        "excludes_zero": true
+      },
+      "ndcg@5": {
+        "baseline_mean": 0.216879,
+        "improved_mean": 0.275608,
+        "delta_mean": 0.058729,
+        "ci95_low": 0.054829,
+        "ci95_high": 0.062603,
+        "excludes_zero": true
+      },
+      "ndcg@10": {
+        "baseline_mean": 0.277837,
+        "improved_mean": 0.335316,
+        "delta_mean": 0.057479,
+        "ci95_low": 0.054036,
+        "ci95_high": 0.060963,
+        "excludes_zero": true
+      }
+    }
+  },
   "feature_ablation": {
     "dataset": "mind",
     "improvement_feature": "freshness_hours_inv",
