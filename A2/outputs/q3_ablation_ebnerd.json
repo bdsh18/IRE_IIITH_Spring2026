@@ -38,6 +38,44 @@
       }
     }
   },
+  "reranker_vs_official_baseline": {
+    "dataset": "ebnerd",
+    "baseline": "most_popular",
+    "metrics": {
+      "auc": {
+        "baseline_mean": 0.467231,
+        "improved_mean": 0.651238,
+        "delta_mean": 0.184007,
+        "ci95_low": 0.170975,
+        "ci95_high": 0.196584,
+        "excludes_zero": true
+      },
+      "mrr": {
+        "baseline_mean": 0.28717,
+        "improved_mean": 0.405936,
+        "delta_mean": 0.118766,
+        "ci95_low": 0.107525,
+        "ci95_high": 0.129857,
+        "excludes_zero": true
+      },
+      "ndcg@5": {
+        "baseline_mean": 0.311729,
+        "improved_mean": 0.455624,
+        "delta_mean": 0.143895,
+        "ci95_low": 0.131749,
+        "ci95_high": 0.155596,
+        "excludes_zero": true
+      },
+      "ndcg@10": {
+        "baseline_mean": 0.408181,
+        "improved_mean": 0.521474,
+        "delta_mean": 0.113293,
+        "ci95_low": 0.103688,
+        "ci95_high": 0.122651,
+        "excludes_zero": true
+      }
+    }
+  },
   "feature_ablation": {
     "dataset": "ebnerd",
     "improvement_feature": "freshness_hours_inv",
