@@ -37,11 +37,13 @@ class InvertedBM25:
 
     def candidate_scores(self, query: str, candidate_ids: list[str]) -> dict[str, float]:
         """Return lexical scores only for articles displayed in an impression."""
-        wanted = {article: i for i, article in enumerate(self.ids) if article in set(candidate_ids)}
+        # wanted = {article: i for i, article in enumerate(self.ids) if article in set(candidate_ids)}
+        wanted = set(candidate_ids)
         scores = {article: 0.0 for article in candidate_ids}
+        max_df = 0.2 * self.n_docs  
         for term in set(tokenize(query)):
             postings = self.postings.get(term, []); df = len(postings)
-            if not df: continue
+            if not df or df > max_df: continue
             idf = log(1 + (self.n_docs - df + .5) / (df + .5))
             for index, tf in postings:
                 article = self.ids[index]
