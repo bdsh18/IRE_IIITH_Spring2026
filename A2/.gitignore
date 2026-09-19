@@ -12,3 +12,5 @@ venv/
 .vscode/
 .idea/
 MIND_data/
+outputs/mind_submission/
+outputs/ebnerd_personalized_submission/
