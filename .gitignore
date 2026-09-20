@@ -1,0 +1,6 @@
+# Assignment 1 source is intentionally absent from the sbidisha_A2 branch.
+# Preserve local datasets and generated submissions without tracking them.
+A1/
+
+# macOS Finder metadata
+.DS_Store
