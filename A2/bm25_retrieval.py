@@ -17,41 +17,94 @@ def tokenize(text: str) -> list[str]:
 class InvertedBM25:
     """BM25 backed by postings lists: score only documents sharing query words."""
     def __init__(self, ids: list[str], texts: list[str], k1: float = 1.5, b: float = .75):
-        self.ids, self.k1, self.b = ids, k1, b; self.lengths = []; self.postings = defaultdict(list)
-        for doc_index, text in enumerate(texts):
-            terms = Counter(tokenize(text)); self.lengths.append(sum(terms.values()))
+        self.ids, self.k1, self.b = ids, k1, b
+        self.lengths: list[int] = []
+        self.postings: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        # These two lookups are essential for submission-time scoring.  A
+        # submission impression has only a handful of shown candidates, so it
+        # is much cheaper to score those documents directly than to scan every
+        # posting and every catalog ID for every impression.
+        self.id_to_index: dict[str, int] = {}
+        self.document_terms: list[Counter[str]] = []
+        for doc_index, (article_id, text) in enumerate(zip(ids, texts)):
+            terms = Counter(tokenize(text))
+            self.id_to_index[article_id] = doc_index
+            self.document_terms.append(terms)
+            self.lengths.append(sum(terms.values()))
             for term, frequency in terms.items(): self.postings[term].append((doc_index, frequency))
-        self.average_length = max(sum(self.lengths) / len(self.lengths), 1); self.n_docs = len(ids)
+        self.average_length = max(sum(self.lengths) / len(self.lengths), 1)
+        self.n_docs = len(ids)
+        self.length_normalizers = [
+            self.k1 * (1 - self.b + self.b * length / self.average_length)
+            for length in self.lengths
+        ]
+        self.idf = {
+            term: log(1 + (self.n_docs - len(posting) + .5) / (len(posting) + .5))
+            for term, posting in self.postings.items()
+        }
 
     def search(self, query: str, k: int, excluded: set[str] | None = None) -> list[str]:
         scores: dict[int, float] = defaultdict(float)
         for term in set(tokenize(query)):
             postings = self.postings.get(term, []); df = len(postings)
             if not df: continue
-            idf = log(1 + (self.n_docs - df + .5) / (df + .5))
+            idf = self.idf[term]
             for index, tf in postings:
-                denominator = tf + self.k1 * (1 - self.b + self.b * self.lengths[index] / self.average_length)
+                denominator = tf + self.length_normalizers[index]
                 scores[index] += idf * tf * (self.k1 + 1) / denominator
         excluded = excluded or set()
         return [self.ids[index] for index, _ in sorted(scores.items(), key=lambda item: -item[1]) if self.ids[index] not in excluded][:k]
 
     def candidate_scores(self, query: str, candidate_ids: list[str]) -> dict[str, float]:
-        """Return lexical scores only for articles displayed in an impression."""
-        wanted = {article: i for i, article in enumerate(self.ids) if article in set(candidate_ids)}
+        """Return lexical scores only for articles displayed in an impression.
+
+        This is intentionally candidate-driven.  The previous implementation
+        scanned the entire article catalog and full postings lists for each
+        test impression, which makes large Codabench generation impractical.
+        The formula is unchanged; only the direction of the lookup changes.
+        """
         scores = {article: 0.0 for article in candidate_ids}
-        for term in set(tokenize(query)):
-            postings = self.postings.get(term, []); df = len(postings)
-            if not df: continue
-            idf = log(1 + (self.n_docs - df + .5) / (df + .5))
-            for index, tf in postings:
-                article = self.ids[index]
-                if article not in wanted: continue
-                denominator = tf + self.k1 * (1 - self.b + self.b * self.lengths[index] / self.average_length)
-                scores[article] += idf * tf * (self.k1 + 1) / denominator
+        query_terms = set(tokenize(query))
+        if not query_terms:
+            return scores
+        for article in scores:
+            index = self.id_to_index.get(article)
+            if index is None:
+                continue
+            terms = self.document_terms[index]
+            score = 0.0
+            for term in query_terms:
+                tf = terms.get(term)
+                if tf is None:
+                    continue
+                score += self.idf[term] * tf * (self.k1 + 1) / (tf + self.length_normalizers[index])
+            scores[article] = score
         return scores
 
 def query_from_history(history: list[object], title_by_id: dict[str, str], recent: int) -> str:
     return " ".join(title_by_id.get(str(article), "") for article in history[-recent:])
+
+
+def retrieve_from_history(
+    index: InvertedBM25,
+    history: list[object],
+    title_by_id: dict[str, str],
+    recent: int,
+    k: int,
+) -> list[str]:
+    """Run the one canonical history-query BM25 retrieval path.
+
+    Every catalog-retrieval evaluation must exclude articles already clicked by
+    the user.  Keeping that rule in one helper prevents recall, candidate
+    coverage, and strict retrieve-then-rank evaluation from silently using
+    different stage-1 semantics.
+    """
+    normalized_history = [str(article) for article in history]
+    query = query_from_history(normalized_history, title_by_id, recent)
+    if not query:
+        return []
+    return index.search(query, k, excluded=set(normalized_history))
+
 
 def evaluate(store: Path, dataset: str, split: str, recent: int, limit: int) -> dict[str, object]:
     articles = pd.read_parquet(store / dataset / "articles.parquet")
@@ -65,7 +118,7 @@ def evaluate(store: Path, dataset: str, split: str, recent: int, limit: int) -> 
         history = [str(article) for article in row.history_ids]
         query = query_from_history(history, title_by_id, recent)
         if not clicked or not query: continue
-        retrieved = index.search(query, 200, excluded=set(history))
+        retrieved = retrieve_from_history(index, history, title_by_id, recent, 200)
         for k in sums: sums[k] += len(clicked.intersection(retrieved[:k])) / len(clicked)
         evaluated += 1
     return {"dataset": dataset, "split": split, "retrieval_corpus_articles": len(ids), "evaluated_impressions": evaluated, "history_articles_used": recent, **{f"recall@{k}": sums[k] / evaluated if evaluated else 0.0 for k in sums}}
@@ -83,8 +136,8 @@ def candidate_generator_coverage(store: Path, dataset: str, split: str, recent: 
         history = [str(article) for article in row.history_ids]
         query = query_from_history(history, title_by_id, recent)
         candidates = {str(c) for c in row.candidate_ids}
+        retrieved = set(retrieve_from_history(index, history, title_by_id, recent, k))
         if not query or not candidates: continue
-        retrieved = set(index.search(query, k))
         covered += len(candidates & retrieved)
         total_candidates += len(candidates)
         evaluated += 1

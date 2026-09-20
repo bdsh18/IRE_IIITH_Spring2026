@@ -2,7 +2,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from features import category_affinity, causal_click_times, causal_popularity_snapshot
+from features import category_affinity, causal_click_times, causal_popularity_snapshot, user_session_click_count, user_session_mean_dwell, user_session_order
 
 def test_category_affinity_ignores_future_clicks():
     category_by_id = {"a1": "sports", "a2": "tech", "future_click": "tech"}
@@ -41,6 +41,17 @@ def test_train_popularity_is_causal():
     assert causal_popularity_snapshot(["x"], click_times, later)["x"] == 1, (
         "sanity check: a genuinely earlier click must still be visible"
     )
+
+def test_session_features_only_use_earlier_events_and_do_not_fake_mind_sessions():
+    frame = pd.DataFrame({
+        "impression_id": ["first", "second", "mind"], "user_id": ["u", "u", "m"],
+        "session_id": ["s", "s", ""], "timestamp": pd.to_datetime(["2024-01-01 10:00", "2024-01-01 10:05", "2024-01-01 10:10"]),
+        "clicked_ids": [["x"], ["y"], ["z"]], "dwell_time": [12.0, 30.0, 99.0],
+    })
+    assert user_session_order(frame) == {"first": 0, "second": 1, "mind": 0}
+    assert user_session_click_count(frame) == {"first": 0, "second": 1, "mind": 0}
+    dwell = user_session_mean_dwell(frame)
+    assert dwell["first"] == 0.0 and dwell["second"] == 12.0 and dwell["mind"] == 0.0
 
 def _check_dataset(store: Path, dataset: str, split: str = "validation") -> None:
     train = pd.read_parquet(store / dataset / "train_impressions.parquet")

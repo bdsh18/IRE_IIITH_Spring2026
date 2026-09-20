@@ -2,6 +2,18 @@
 *.pt
 *.ckpt
 data/
+# Competition prediction files are generated locally and can be many GB.
+# Keep code, metrics, and report assets under outputs/, but never stage these.
+outputs/mind_submission/
+outputs/ebnerd_submission/
+outputs/ebnerd_personalized_submission/
+outputs/mind_v2_submission*/
+outputs/ebnerd_v2_submission/
+outputs/ebnerd_v2_numeric_smoke/
+outputs/*_submission_smoke_optimized/
+outputs/V3/
+*.partial
+*.resume.json
 __pycache__/
 *.pyc
 .pytest_cache/

@@ -5,21 +5,21 @@
     "embedding_dimensions": 100,
     "index": "brute-force cosine ANN baseline",
     "evaluated_impressions": 29404,
-    "recall@50": 0.003431451935056887,
+    "recall@50": 0.003506271687471524,
     "recall@100": 0.006210957153005854,
-    "recall@200": 0.01047464510428733,
+    "recall@200": 0.010454806533571328,
     "slices": {
       "cold_history_under_5": {
         "evaluated_impressions": 3156,
-        "recall@50": 0.004964089564850021,
+        "recall@50": 0.00534431770173215,
         "recall@100": 0.009093789607097592,
         "recall@200": 0.01511406844106464
       },
       "warm_history_5_or_more": {
         "evaluated_impressions": 26248,
-        "recall@50": 0.0032471710618617055,
+        "recall@50": 0.003285269202672433,
         "recall@100": 0.005864331915840602,
-        "recall@200": 0.009916811362635806
+        "recall@200": 0.00989458744716288
       }
     }
   },

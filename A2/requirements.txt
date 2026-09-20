@@ -3,3 +3,7 @@ numpy
 pyarrow
 polars
 tqdm
+lightgbm
+scikit-learn
+pytest
+faiss-cpu

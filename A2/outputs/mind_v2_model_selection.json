@@ -1,0 +1,35 @@
+{
+  "dataset": "MINDlarge",
+  "selection_split": "official_future_dev",
+  "selection_rule": "Choose the highest full-dev AUC before training a final train+dev model.",
+  "experiments": [
+    {
+      "name": "v2_grouped_sample_mod25",
+      "train_impressions": 89200,
+      "candidate_rows": 1994599,
+      "auc": 0.6182015395731154,
+      "mrr": 0.34162723850945664,
+      "ndcg@5": 0.32399516513508175,
+      "ndcg@10": 0.38309541167838995
+    },
+    {
+      "name": "v2_idf_lexical_sample_mod25",
+      "train_impressions": 89200,
+      "candidate_rows": 1994599,
+      "auc": 0.6197219427255971,
+      "mrr": 0.3450637551632273,
+      "ndcg@5": 0.32655599581924394,
+      "ndcg@10": 0.3852715739957327
+    },
+    {
+      "name": "v2_idf_lexical_sample_mod10",
+      "train_impressions": 224597,
+      "candidate_rows": 5022849,
+      "auc": 0.6204976674801118,
+      "mrr": 0.34714142522072755,
+      "ndcg@5": 0.328059594118912,
+      "ndcg@10": 0.3868861400222852,
+      "selected": true
+    }
+  ]
+}

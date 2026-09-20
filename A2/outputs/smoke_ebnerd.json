@@ -1,0 +1,41 @@
+{
+  "dataset": "ebnerd",
+  "ranker_backend": "lightgbm_lambdarank",
+  "two_stage": {
+    "stage1": {
+      "generator": "BM25(title + abstract)",
+      "top_k": 200,
+      "clicked_article_recall": {
+        "dataset": "ebnerd",
+        "split": "validation",
+        "retrieval_corpus_articles": 11777,
+        "evaluated_impressions": 100,
+        "history_articles_used": 5,
+        "recall@50": 0.0,
+        "recall@100": 0.0,
+        "recall@200": 0.02
+      },
+      "shown_candidate_coverage": {
+        "dataset": "ebnerd",
+        "split": "validation",
+        "k": 200,
+        "evaluated_impressions": 100,
+        "candidate_set_coverage": 0.02452316076294278
+      }
+    },
+    "stage2": "LightGBM LambdaRank over behavioural, semantic, lexical, session, and article features"
+  },
+  "before_bm25_only": {
+    "auc": 0.483664,
+    "mrr": 0.295723,
+    "ndcg@5": 0.325256,
+    "ndcg@10": 0.421453
+  },
+  "after_reranked": {
+    "auc": 0.665747,
+    "mrr": 0.447666,
+    "ndcg@5": 0.523738,
+    "ndcg@10": 0.569779
+  },
+  "impressions": 100
+}

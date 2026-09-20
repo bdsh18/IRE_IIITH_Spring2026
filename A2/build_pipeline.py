@@ -44,7 +44,7 @@ def load_mind(folder: Path, split: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     articles["article_id"] = articles.article_id.astype(str)
     behaviors = pd.read_csv(folder / "behaviors.tsv", sep="\t", names=MIND_BEHAVIORS, header=None, quoting=3)
     parsed = behaviors.raw_candidates.map(mind_candidates)
-    impressions = pd.DataFrame({"dataset": "mind", "source_split": split, "impression_id": behaviors.impression_id.astype(str), "user_id": behaviors.user_id.astype(str), "timestamp": pd.to_datetime(behaviors.timestamp), "candidate_ids": parsed.map(lambda x: x[0]), "clicked_ids": parsed.map(lambda x: x[1]), "history_ids": behaviors.history.map(tokens), "session_id": ""})
+    impressions = pd.DataFrame({"dataset": "mind", "source_split": split, "impression_id": behaviors.impression_id.astype(str), "user_id": behaviors.user_id.astype(str), "timestamp": pd.to_datetime(behaviors.timestamp), "candidate_ids": parsed.map(lambda x: x[0]), "clicked_ids": parsed.map(lambda x: x[1]), "history_ids": behaviors.history.map(tokens), "session_id": "", "dwell_time": 0.0})
     impressions["history_recency_weights"] = impressions.history_ids.map(recency_weights)
     return articles[["dataset", "source_split", "article_id", "title", "abstract", "body", "category", "subcategory", "entities", "embedding_available", "embedding_path"]], impressions
 
@@ -60,7 +60,7 @@ def load_ebnerd(folder: Path, split: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     history = pd.read_parquet(folder / split / "history.parquet")
     history_id_col = "article_id_fixed" if "article_id_fixed" in history else "article_id"
     history_map = dict(zip(history.user_id.astype(str), history[history_id_col].map(tokens)))
-    impressions = pd.DataFrame({"dataset": "ebnerd", "source_split": split, "impression_id": pick(behaviors, "impression_id").astype(str), "user_id": pick(behaviors, "user_id").astype(str), "timestamp": pd.to_datetime(pick(behaviors, "impression_time")), "candidate_ids": pick(behaviors, "article_ids_inview").map(tokens), "clicked_ids": pick(behaviors, "article_ids_clicked").map(tokens), "session_id": pick(behaviors, "session_id").astype(str)})
+    impressions = pd.DataFrame({"dataset": "ebnerd", "source_split": split, "impression_id": pick(behaviors, "impression_id").astype(str), "user_id": pick(behaviors, "user_id").astype(str), "timestamp": pd.to_datetime(pick(behaviors, "impression_time")), "candidate_ids": pick(behaviors, "article_ids_inview").map(tokens), "clicked_ids": pick(behaviors, "article_ids_clicked").map(tokens), "session_id": pick(behaviors, "session_id").astype(str), "dwell_time": pd.to_numeric(pick(behaviors, "read_time", default=0.0), errors="coerce").fillna(0.0)})
     impressions["history_ids"] = impressions.user_id.map(history_map).map(lambda x: x if isinstance(x, list) else [])
     impressions["history_recency_weights"] = impressions.history_ids.map(recency_weights)
     return articles, impressions

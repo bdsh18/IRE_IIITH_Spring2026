@@ -1,0 +1,39 @@
+{
+  "dataset": "MINDlarge",
+  "split": "official_future_dev",
+  "impressions": 376471,
+  "model": {
+    "auc": 0.6182015395731154,
+    "mrr": 0.34162723850945664,
+    "ndcg@5": 0.32399516513508175,
+    "ndcg@10": 0.38309541167838995
+  },
+  "popularity_baseline": {
+    "auc": 0.538574659817073,
+    "mrr": 0.2617934040415472,
+    "ndcg@5": 0.2452711183037018,
+    "ndcg@10": 0.3078705334690154
+  },
+  "bootstrap_95_ci": {
+    "auc": [
+      0.6173372674173936,
+      0.6191438849970246
+    ],
+    "mrr": [
+      0.3405537209801861,
+      0.3428050588171365
+    ],
+    "ndcg@5": [
+      0.3228424928871152,
+      0.3251274185969353
+    ],
+    "ndcg@10": [
+      0.3820358582069868,
+      0.3842483536744157
+    ]
+  },
+  "notes": [
+    "MINDlarge_dev is later than MINDlarge_train; no random interaction split is used.",
+    "Popularity uses MINDlarge_train clicks only, so it contains no dev click labels."
+  ]
+}

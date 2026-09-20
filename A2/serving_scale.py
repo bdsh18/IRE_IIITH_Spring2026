@@ -10,16 +10,29 @@ from tqdm.auto import tqdm
 
 from bm25_retrieval import InvertedBM25, query_from_history
 from features import (
-    FEATURE_NAMES,
     article_metadata,
     candidate_features,
     load_embeddings,
+    ranker_feature_names,
     train_popularity,
-    user_session_click_count,
-    user_session_order,
     weighted_user_vector,
 )
-from reranker import build_dataset_features, train_model
+from reranker import build_dataset_features, predict_scores, train_model
+
+try:
+    import faiss
+except ImportError:  # Report the dense fallback only when FAISS is not installed.
+    faiss = None
+
+def build_ann_index(vectors: np.ndarray | None):
+    if vectors is None or not len(vectors):
+        return None, 0, "unavailable"
+    if faiss is None:
+        return None, int(vectors.nbytes), "dense_exact_fallback (install faiss-cpu for HNSW)"
+    index = faiss.IndexHNSWFlat(vectors.shape[1], 32, faiss.METRIC_INNER_PRODUCT)
+    index.hnsw.efSearch = 64
+    index.add(np.ascontiguousarray(vectors))
+    return index, len(faiss.serialize_index(index)), "FAISS IndexHNSWFlat(M=32, efSearch=64)"
 
 
 def corpus_and_index_size(store: Path, dataset: str) -> dict:
@@ -50,9 +63,11 @@ def corpus_and_index_size(store: Path, dataset: str) -> dict:
     embeddings_path = store / dataset / "article_embeddings.npz"
     embedding_bytes_on_disk = bytes_on_disk(embeddings_path)
     embedding_bytes_in_memory = int(vectors.nbytes) if vectors is not None else 0
+    _ann, ann_serialized_bytes, ann_type = build_ann_index(vectors)
 
-    articles_path = store / dataset / "articles.parquet"
-    feature_store_bytes_on_disk = bytes_on_disk(articles_path) + sum(bytes_on_disk(parquet_path(split)) for split in ("train", "validation", "test"))
+    # Include the base article/impression Parquet files and cached candidate-level
+    # feature tables produced for the re-ranker.
+    feature_store_bytes_on_disk = sum(path.stat().st_size for path in (store / dataset).glob("*.parquet"))
     from features import build_features
     sample_features = build_features(store, dataset, "validation")
     feature_table_bytes_in_memory_per_1k_rows = int(sample_features.memory_usage(deep=True).sum() / max(len(sample_features), 1) * 1000)
@@ -77,6 +92,8 @@ def corpus_and_index_size(store: Path, dataset: str) -> dict:
             "embedding_index_bytes_on_disk_compressed": embedding_bytes_on_disk,
             "embedding_index_load_seconds": round(embedding_load_seconds, 4),
             "embedding_index_load_throughput_vectors_per_sec": round((vectors.shape[0] if vectors is not None else 0) / max(embedding_load_seconds, 1e-9), 1),
+            "ann_index_type": ann_type,
+            "ann_index_serialized_bytes": ann_serialized_bytes,
         },
         "feature_store": {
             "parquet_bytes_on_disk": feature_store_bytes_on_disk,
@@ -101,8 +118,6 @@ def latency_benchmark(store: Path, dataset: str, model, columns: list[str], repe
     max_pop = max(popularity.values(), default=1)
 
     impressions = pd.read_parquet(store / dataset / "validation_impressions.parquet")
-    session_rank = user_session_order(impressions)
-    session_clicks = user_session_click_count(impressions)
     sample = impressions.sample(min(repeats, len(impressions)), random_state=0)
 
     durations, query_lengths, candidate_counts = [], [], []
@@ -116,20 +131,20 @@ def latency_benchmark(store: Path, dataset: str, model, columns: list[str], repe
         query_lengths.append(len(query.split()))
         candidate_counts.append(len(candidates))
         candidate_scores = index.candidate_scores(query, candidates)
-        session_count = session_rank.get(str(row.impression_id), 0)
-        session_click_count = session_clicks.get(str(row.impression_id), 0)
-
+        # The benchmark is deliberately submission-matched.  Competition test
+        # data has no preceding within-session trace, so these values cannot be
+        # supplied at request time.
         feature_rows = [
             candidate_features(
                 article, position, history_ids, weights, category_by_id, topics_by_id,
                 popularity, max_pop, positions, vectors, published_by_id, row.timestamp,
-                session_count, session_click_count,
+                0, 0, 0.0,
             ) | {"bm25_score": candidate_scores.get(article, 0.0)}
             for position, article in enumerate(candidates)
         ]
         feature_matrix = pd.DataFrame(feature_rows)
         if len(feature_matrix):
-            model.predict(feature_matrix[columns])
+            predict_scores(model, feature_matrix[columns])
         durations.append(time.perf_counter() - start)
     benchmark_wall_seconds = time.perf_counter() - benchmark_start
 
@@ -158,6 +173,7 @@ def latency_benchmark(store: Path, dataset: str, model, columns: list[str], repe
 
 def semantic_latency_benchmark(store: Path, dataset: str, repeats: int) -> dict:
     positions, vectors = load_embeddings(store, dataset)
+    ann_index, _ann_bytes, ann_type = build_ann_index(vectors)
     impressions = pd.read_parquet(store / dataset / "validation_impressions.parquet")
     sample = impressions.sample(min(repeats, len(impressions)), random_state=0)
 
@@ -170,13 +186,17 @@ def semantic_latency_benchmark(store: Path, dataset: str, repeats: int) -> dict:
         if vectors is not None:
             user = weighted_user_vector(history_ids, weights, positions, vectors)
             if user is not None:
-                _ = vectors @ user
+                if ann_index is not None:
+                    _ = ann_index.search(np.ascontiguousarray(user[None, :].astype(np.float32)), 200)
+                else:
+                    _ = vectors @ user
         durations.append(time.perf_counter() - start)
     benchmark_wall_seconds = time.perf_counter() - benchmark_start
 
     durations = np.asarray(durations) if durations else np.asarray([0.0])
     measured_qps = round(len(durations) / benchmark_wall_seconds, 2) if benchmark_wall_seconds > 0 else 0.0
     return {
+        "index_type": ann_type,
         "n_requests": len(durations),
         "measured_single_process_qps": measured_qps,
         "p50_ms": round(float(np.percentile(durations, 50) * 1000), 3),
@@ -209,7 +229,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("outputs/q4_serving_scale.json"))
     args = parser.parse_args()
 
-    columns = FEATURE_NAMES + ["bm25_score"]
+    # Measure the same column set used by both large-test submission scripts.
+    columns = ranker_feature_names(serving_only=True) + ["bm25_score"]
     train_features = build_dataset_features(args.store, args.dataset, "train", 0)
     model = train_model(train_features, columns)
 
@@ -220,6 +241,8 @@ def main() -> None:
 
     result = {
         "dataset": args.dataset,
+        "feature_policy": "submission_matched_serving_only",
+        "feature_columns": columns,
         "corpus_size": size["corpus"],
         "index_size": size["index"],
         "feature_store_size": size["feature_store"],

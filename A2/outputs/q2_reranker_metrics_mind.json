@@ -1,16 +1,41 @@
 {
   "dataset": "mind",
+  "ranker_backend": "lightgbm_lambdarank",
+  "two_stage": {
+    "stage1": {
+      "generator": "BM25(title + abstract)",
+      "top_k": 200,
+      "clicked_article_recall": {
+        "dataset": "mind",
+        "split": "validation",
+        "retrieval_corpus_articles": 65238,
+        "evaluated_impressions": 29498,
+        "history_articles_used": 5,
+        "recall@50": 0.013476634559419814,
+        "recall@100": 0.02151608110062923,
+        "recall@200": 0.032194824991794345
+      },
+      "shown_candidate_coverage": {
+        "dataset": "mind",
+        "split": "validation",
+        "k": 200,
+        "evaluated_impressions": 29498,
+        "candidate_set_coverage": 0.00992840207595387
+      }
+    },
+    "stage2": "LightGBM LambdaRank over behavioural, semantic, lexical, session, and article features"
+  },
   "before_bm25_only": {
-    "auc": 0.543002,
-    "mrr": 0.282822,
-    "ndcg@5": 0.25461,
-    "ndcg@10": 0.310689
+    "auc": 0.54512,
+    "mrr": 0.28294,
+    "ndcg@5": 0.254381,
+    "ndcg@10": 0.311059
   },
   "after_reranked": {
-    "auc": 0.589701,
-    "mrr": 0.300765,
-    "ndcg@5": 0.275608,
-    "ndcg@10": 0.335316
+    "auc": 0.590204,
+    "mrr": 0.301915,
+    "ndcg@5": 0.276504,
+    "ndcg@10": 0.335893
   },
   "impressions": 30269
 }

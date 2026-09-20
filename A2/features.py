@@ -16,11 +16,35 @@ FEATURE_NAMES = [
     "freshness_hours_inv",
     "session_prior_impressions",
     "session_clicks_so_far",
+    "session_mean_dwell_time",
     "position_bias",
     "history_length",
 ]
 
-SUBMISSION_TIME_UNAVAILABLE = ["session_prior_impressions", "session_clicks_so_far"]
+# The large competition test files do not expose prior impressions inside a
+# session, prior session clicks, or a previous dwell-time trace.  Both
+# submission generators therefore supply zero for all three fields.  Keep this
+# list as the single source of truth for the submission model and for the
+# serving-parity evaluation.
+SUBMISSION_TIME_UNAVAILABLE = [
+    "session_prior_impressions",
+    "session_clicks_so_far",
+    "session_mean_dwell_time",
+]
+
+
+def ranker_feature_names(serving_only: bool = False) -> list[str]:
+    """Return behavioural feature columns available to a ranker.
+
+    ``serving_only=True`` exactly mirrors the feature schema used by the
+    Codabench generators.  Popularity and semantic score remain available:
+    they are served from versioned, batch-refreshed artifacts, so they are not
+    silently treated as unavailable session signals.
+    """
+    if not serving_only:
+        return list(FEATURE_NAMES)
+    unavailable = set(SUBMISSION_TIME_UNAVAILABLE)
+    return [name for name in FEATURE_NAMES if name not in unavailable]
 
 def optional_column(frame: pd.DataFrame, name: str, default):
     if name in frame.columns:
@@ -54,7 +78,11 @@ def user_session_order(impressions: pd.DataFrame) -> dict[str, int]:
     order: dict[str, int] = {}
     seen: dict[tuple[str, str], int] = defaultdict(int)
     for row in ordered.itertuples(index=False):
-        key = (str(row.user_id), str(getattr(row, "session_id", "") or ""))
+        session_id = str(getattr(row, "session_id", "") or "")
+        if not session_id:
+            order[str(row.impression_id)] = 0
+            continue
+        key = (str(row.user_id), session_id)
         order[str(row.impression_id)] = seen[key]
         seen[key] += 1
     return order
@@ -65,10 +93,27 @@ def user_session_click_count(impressions: pd.DataFrame) -> dict[str, int]:
     counts: dict[str, int] = {}
     running: dict[tuple[str, str], int] = defaultdict(int)
     for row in ordered.itertuples(index=False):
-        key = (str(row.user_id), str(getattr(row, "session_id", "") or ""))
+        session_id = str(getattr(row, "session_id", "") or "")
+        if not session_id:
+            counts[str(row.impression_id)] = 0
+            continue
+        key = (str(row.user_id), session_id)
         counts[str(row.impression_id)] = running[key]
         running[key] += len(row.clicked_ids)
     return counts
+
+def user_session_mean_dwell(impressions: pd.DataFrame) -> dict[str, float]:
+    """Prior mean dwell time in the same session; zero when unavailable."""
+    means, running = {}, {}
+    for row in impressions.sort_values("timestamp").itertuples(index=False):
+        session_id = str(getattr(row, "session_id", "") or "")
+        if not session_id:
+            means[str(row.impression_id)] = 0.0
+            continue
+        key = (str(row.user_id), session_id); total, count = running.get(key, (0.0, 0))
+        means[str(row.impression_id)] = total / count if count else 0.0
+        running[key] = (total + max(0.0, float(getattr(row, "dwell_time", 0.0) or 0.0)), count + 1)
+    return means
 
 
 def category_affinity(history_ids: list, history_weights: list, category_by_id: dict[str, str], candidate_category: str) -> float:
@@ -118,6 +163,93 @@ def semantic_score(history_ids: list, history_weights: list, positions: dict[str
     return float(vectors[positions[candidate_id]] @ user_vector)
 
 
+def prepare_candidate_context(
+    history_ids: list,
+    weights: list,
+    category_by_id: dict[str, str],
+    topics_by_id: dict[str, tuple],
+    popularity: dict,
+    max_pop: int,
+    positions: dict[str, int] | None,
+    vectors: np.ndarray | None,
+) -> dict:
+    """Compute user-side signals once per impression, not once per candidate.
+
+    Submission impressions often contain several candidates.  Category/topic
+    preference and the weighted user vector are invariant across that list;
+    caching them here removes repeated history scans and vector pooling while
+    preserving the feature definitions used in offline evaluation.
+    """
+    category_weights: Counter = Counter()
+    topic_weights: Counter = Counter()
+    for article, weight in zip(history_ids, weights):
+        article_id = str(article)
+        category_weights[category_by_id.get(article_id, "")] += weight
+        for topic in topics_by_id.get(article_id, ()):
+            topic_weights[topic] += weight
+    return {
+        "category_weights": category_weights,
+        "category_total": max(sum(category_weights.values()), 1e-9),
+        "topic_weights": topic_weights,
+        "topic_strongest": max(topic_weights.values()) if topic_weights else 0.0,
+        "user_vector": weighted_user_vector(history_ids, weights, positions, vectors),
+        "positions": positions,
+        "vectors": vectors,
+        "popularity": popularity,
+        "max_pop": max_pop,
+        "history_length": len(history_ids),
+    }
+
+
+def candidate_features_from_context(
+    article: str,
+    position: int,
+    context: dict,
+    category_by_id: dict[str, str],
+    topics_by_id: dict[str, tuple],
+    published_by_id: dict,
+    now,
+    session_count: int,
+    session_clicks: int,
+    session_mean_dwell: float,
+) -> dict:
+    """Build candidate features from a precomputed per-impression context."""
+    candidate_category = category_by_id.get(article, "")
+    candidate_topics = topics_by_id.get(article, ())
+    category_value = context["category_weights"][candidate_category] / context["category_total"]
+    topic_value = 0.0
+    if candidate_topics and context["topic_weights"] and context["topic_strongest"]:
+        topic_value = sum(context["topic_weights"][topic] for topic in candidate_topics) / (
+            context["topic_strongest"] * len(candidate_topics)
+        )
+    semantic_value = 0.0
+    user_vector = context["user_vector"]
+    positions = context.get("positions")
+    vectors = context.get("vectors")
+    if user_vector is not None and positions is not None and vectors is not None:
+        index = positions.get(article)
+        if index is not None:
+            semantic_value = float(vectors[index] @ user_vector)
+    freshness = 0.0
+    published = published_by_id.get(article) if published_by_id else None
+    if published is not None and pd.notna(published):
+        hours = max(0.0, (now - published).total_seconds() / 3600)
+        freshness = math.exp(-hours / (24 * 4))
+    return {
+        "article_id": article,
+        "category_affinity": category_value,
+        "topic_affinity": topic_value,
+        "semantic_score": semantic_value,
+        "popularity": math.log1p(context["popularity"].get(article, 0)) / math.log1p(max(context["max_pop"], 1)),
+        "freshness_hours_inv": freshness,
+        "session_prior_impressions": session_count,
+        "session_clicks_so_far": session_clicks,
+        "session_mean_dwell_time": session_mean_dwell,
+        "position_bias": 1.0 / math.log2(position + 2),
+        "history_length": context["history_length"],
+    }
+
+
 def article_metadata(articles: pd.DataFrame) -> tuple[dict[str, str], dict[str, tuple], dict[str, object]]:
     category_by_id = dict(zip(articles.article_id.astype(str), articles.category.fillna("")))
     topics_series = optional_column(articles, "topics", None)
@@ -154,26 +286,16 @@ def candidate_features(
     now,
     session_count: int,
     session_clicks: int,
+    session_mean_dwell: float,
 ) -> dict:
-    candidate_category = category_by_id.get(article, "")
-    candidate_topics = topics_by_id.get(article, ())
-    freshness = 0.0
-    published = published_by_id.get(article) if published_by_id else None
-    if published is not None and pd.notna(published):
-        hours = max(0.0, (now - published).total_seconds() / 3600)
-        freshness = math.exp(-hours / (24 * 4))
-    return {
-        "article_id": article,
-        "category_affinity": category_affinity(history_ids, weights, category_by_id, candidate_category),
-        "topic_affinity": topic_affinity(history_ids, weights, topics_by_id, candidate_topics),
-        "semantic_score": semantic_score(history_ids, weights, positions, vectors, article),
-        "popularity": math.log1p(popularity.get(article, 0)) / math.log1p(max(max_pop, 1)),
-        "freshness_hours_inv": freshness,
-        "session_prior_impressions": session_count,
-        "session_clicks_so_far": session_clicks,
-        "position_bias": 1.0 / math.log2(position + 2),
-        "history_length": len(history_ids),
-    }
+    context = prepare_candidate_context(
+        history_ids, weights, category_by_id, topics_by_id,
+        popularity, max_pop, positions, vectors,
+    )
+    return candidate_features_from_context(
+        article, position, context, category_by_id, topics_by_id,
+        published_by_id, now, session_count, session_clicks, session_mean_dwell,
+    )
 
 
 def build_features(store: Path, dataset: str, split: str) -> pd.DataFrame:
@@ -190,6 +312,7 @@ def build_features(store: Path, dataset: str, split: str) -> pd.DataFrame:
     impressions = pd.read_parquet(store / dataset / f"{split}_impressions.parquet")
     session_rank = user_session_order(impressions)
     session_clicks = user_session_click_count(impressions)
+    session_dwell = user_session_mean_dwell(impressions)
 
     rows = []
     for row in impressions.itertuples(index=False):
@@ -199,14 +322,18 @@ def build_features(store: Path, dataset: str, split: str) -> pd.DataFrame:
         clicked = {str(c) for c in row.clicked_ids}
         session_count = session_rank.get(str(row.impression_id), 0)
         session_click_count = session_clicks.get(str(row.impression_id), 0)
+        session_mean_dwell = session_dwell.get(str(row.impression_id), 0.0)
 
         popularity = causal_popularity_snapshot(candidates, click_times, row.timestamp) if split == "train" else full_popularity
+        context = prepare_candidate_context(
+            history_ids, weights, category_by_id, topics_by_id,
+            popularity, max_pop, positions, vectors,
+        )
 
         for position, article in enumerate(candidates):
-            features = candidate_features(
-                article, position, history_ids, weights, category_by_id, topics_by_id,
-                popularity, max_pop, positions, vectors, published_by_id, row.timestamp,
-                session_count, session_click_count,
+            features = candidate_features_from_context(
+                article, position, context, category_by_id, topics_by_id, published_by_id, row.timestamp,
+                session_count, session_click_count, session_mean_dwell,
             )
             rows.append({
                 "dataset": dataset,

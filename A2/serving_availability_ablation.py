@@ -4,12 +4,8 @@ import json
 from pathlib import Path
 
 from ablation import METRIC_NAMES, paired_bootstrap, per_impression_metric_series
-from features import FEATURE_NAMES
+from features import SUBMISSION_TIME_UNAVAILABLE, ranker_feature_names
 from reranker import build_dataset_features, score_validation, train_model
-
-SERVING_RISK_FEATURES = ["popularity", "semantic_score"]
-SERVING_SAFE_FEATURES = [name for name in FEATURE_NAMES if name not in SERVING_RISK_FEATURES]
-
 
 def score_with_columns(train_features, valid_features, columns: list[str]) -> dict:
     model = train_model(train_features, columns)
@@ -17,29 +13,38 @@ def score_with_columns(train_features, valid_features, columns: list[str]) -> di
 
 
 def serving_availability_check(store: Path, dataset: str, limit: int) -> dict:
-    full_columns = FEATURE_NAMES + ["bm25_score"]
-    safe_columns = SERVING_SAFE_FEATURES + ["bm25_score"]
+    # This comparison must reproduce the feature schema in both competition
+    # submission generators.  Popularity and semantic score are valid serving
+    # inputs because they come from versioned, batch-refreshed artifacts;
+    # within-session aggregates are absent from the released test files.
+    full_columns = ranker_feature_names(serving_only=False) + ["bm25_score"]
+    serving_columns = ranker_feature_names(serving_only=True) + ["bm25_score"]
 
     train_features = build_dataset_features(store, dataset, "train", 0)
     valid_features = build_dataset_features(store, dataset, "validation", limit)
 
     with_all_features = score_with_columns(train_features, valid_features, full_columns)
-    serving_safe_only = score_with_columns(train_features, valid_features, safe_columns)
+    serving_only = score_with_columns(train_features, valid_features, serving_columns)
 
     result = {
         "dataset": dataset,
-        "dropped_features": SERVING_RISK_FEATURES,
+        "comparison": "offline_full_vs_submission_matched_serving_only",
+        "offline_full_columns": full_columns,
+        "serving_only_columns": serving_columns,
+        "dropped_features": list(SUBMISSION_TIME_UNAVAILABLE),
         "reason": (
-            "both depend on a batch-refreshed index (train click popularity, "
-            "article_embeddings.npz) that lags for brand-new articles until "
-            "the next offline refresh job runs"
+            "competition test impressions do not include preceding impressions, "
+            "preceding session clicks, or a preceding dwell-time trace. Both "
+            "submission generators therefore set these fields to zero and train "
+            "with them excluded. Popularity and semantic score are retained from "
+            "time-safe, versioned batch artifacts."
         ),
         "metrics": {},
     }
     for index, name in enumerate(METRIC_NAMES):
-        with_risk_features = per_impression_metric_series(with_all_features, "model_score", index)
-        serving_safe = per_impression_metric_series(serving_safe_only, "model_score", index)
-        result["metrics"][name] = paired_bootstrap(serving_safe, with_risk_features)
+        offline_full = per_impression_metric_series(with_all_features, "model_score", index)
+        submission_matched = per_impression_metric_series(serving_only, "model_score", index)
+        result["metrics"][name] = paired_bootstrap(submission_matched, offline_full)
     return result
 
 
