@@ -1,6 +1,7 @@
 *.zip
 *.pt
 *.ckpt
+*.log
 data/
 # Competition prediction files are generated locally and can be many GB.
 # Keep code, metrics, and report assets under outputs/, but never stage these.

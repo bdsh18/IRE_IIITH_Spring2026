@@ -2,7 +2,7 @@
 
 This `sbidisha_A2` branch contains the complete Assignment 2 implementation, reproducible experiment instructions, small tracked metrics, and the final design note. Large datasets, extracted stores, virtual environments, model caches, and Codabench prediction archives are intentionally ignored by Git.
 
-The report with local validation results and large-test Codabench evidence is available at [`A2/outputs/Design_Note_A2.pdf`](A2/outputs/Design_Note_A2.pdf). The completed MIND large-test submission recorded AUC **0.6290**, MRR **0.3071**, nDCG@5 **0.3295**, and nDCG@10 **0.3860**. The EB-NeRD large-test submission is recorded as submitted; its numeric score was pending when the report was generated.
+The report with local validation results and large-test Codabench evidence is available at [`A2/outputs/Design_Note_A2.pdf`](A2/outputs/Design_Note_A2.pdf). The completed MIND large-test submission recorded AUC **0.6290**, MRR **0.3071**, nDCG@5 **0.3295**, and nDCG@10 **0.3860**. The EB-NeRD large-test submission is recorded as submitted; its numeric score was pending when the report was generated. The AI-assistance disclosure and prompt index are in [`A2/AI_USAGE_LOG.md`](A2/AI_USAGE_LOG.md).
 
 ## Assignment 2 — Learning from Click-Logs
 
