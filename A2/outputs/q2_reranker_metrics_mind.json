@@ -1,6 +1,17 @@
 {
   "dataset": "mind",
   "ranker_backend": "lightgbm_lambdarank",
+  "feature_policy": "serving_only",
+  "feature_columns": [
+    "category_affinity",
+    "topic_affinity",
+    "semantic_score",
+    "popularity",
+    "freshness_hours_inv",
+    "position_bias",
+    "history_length",
+    "bm25_score"
+  ],
   "two_stage": {
     "stage1": {
       "generator": "BM25(title + abstract)",
@@ -20,22 +31,57 @@
         "split": "validation",
         "k": 200,
         "evaluated_impressions": 29498,
-        "candidate_set_coverage": 0.00992840207595387
+        "candidate_set_coverage": 0.00967335439713944
       }
     },
-    "stage2": "LightGBM LambdaRank over behavioural, semantic, lexical, session, and article features"
+    "stage2": {
+      "description": "LightGBM LambdaRank over submission-available behavioural, semantic, lexical, and article features",
+      "in_view_reranker_metrics": {
+        "before_bm25_only": {
+          "auc": 0.543076,
+          "mrr": 0.282864,
+          "ndcg@5": 0.254439,
+          "ndcg@10": 0.310678
+        },
+        "after_reranked": {
+          "auc": 0.590244,
+          "mrr": 0.301925,
+          "ndcg@5": 0.276467,
+          "ndcg@10": 0.335841
+        },
+        "impressions": 30269
+      },
+      "retrieval_gated_inview_metrics": {
+        "protocol": "Catalog BM25 top-K gates the re-ranker. Non-retrieved logged candidates receive a stable bottom score; only in-view labels are observable, so this is an impression-grounded strict two-stage diagnostic.",
+        "metrics": {
+          "before_bm25_only": {
+            "auc": 0.512827,
+            "mrr": 0.253208,
+            "ndcg@5": 0.223656,
+            "ndcg@10": 0.281728
+          },
+          "after_reranked": {
+            "auc": 0.51286,
+            "mrr": 0.252789,
+            "ndcg@5": 0.223512,
+            "ndcg@10": 0.281589
+          },
+          "impressions": 30269
+        }
+      }
+    }
   },
   "before_bm25_only": {
-    "auc": 0.54512,
-    "mrr": 0.28294,
-    "ndcg@5": 0.254381,
-    "ndcg@10": 0.311059
+    "auc": 0.543076,
+    "mrr": 0.282864,
+    "ndcg@5": 0.254439,
+    "ndcg@10": 0.310678
   },
   "after_reranked": {
-    "auc": 0.590204,
-    "mrr": 0.301915,
-    "ndcg@5": 0.276504,
-    "ndcg@10": 0.335893
+    "auc": 0.590244,
+    "mrr": 0.301925,
+    "ndcg@5": 0.276467,
+    "ndcg@10": 0.335841
   },
   "impressions": 30269
 }

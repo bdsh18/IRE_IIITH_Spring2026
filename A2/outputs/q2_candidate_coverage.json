@@ -2,15 +2,15 @@
   {
     "dataset": "mind",
     "split": "validation",
-    "k": 150,
+    "k": 200,
     "evaluated_impressions": 29498,
-    "candidate_set_coverage": 0.008146424214763569
+    "candidate_set_coverage": 0.00967335439713944
   },
   {
     "dataset": "ebnerd",
     "split": "validation",
-    "k": 150,
+    "k": 200,
     "evaluated_impressions": 3962,
-    "candidate_set_coverage": 0.016432940013591153
+    "candidate_set_coverage": 0.02256955169786454
   }
 ]

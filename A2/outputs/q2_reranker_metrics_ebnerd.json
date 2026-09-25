@@ -1,16 +1,87 @@
 {
   "dataset": "ebnerd",
+  "ranker_backend": "lightgbm_lambdarank",
+  "feature_policy": "serving_only",
+  "feature_columns": [
+    "category_affinity",
+    "topic_affinity",
+    "semantic_score",
+    "popularity",
+    "freshness_hours_inv",
+    "position_bias",
+    "history_length",
+    "bm25_score"
+  ],
+  "two_stage": {
+    "stage1": {
+      "generator": "BM25(title + abstract)",
+      "top_k": 200,
+      "clicked_article_recall": {
+        "dataset": "ebnerd",
+        "split": "validation",
+        "retrieval_corpus_articles": 11777,
+        "evaluated_impressions": 3962,
+        "history_articles_used": 5,
+        "recall@50": 0.009591115598182737,
+        "recall@100": 0.016153457849570924,
+        "recall@200": 0.03054013124684503
+      },
+      "shown_candidate_coverage": {
+        "dataset": "ebnerd",
+        "split": "validation",
+        "k": 200,
+        "evaluated_impressions": 3962,
+        "candidate_set_coverage": 0.02256955169786454
+      }
+    },
+    "stage2": {
+      "description": "LightGBM LambdaRank over submission-available behavioural, semantic, lexical, and article features",
+      "in_view_reranker_metrics": {
+        "before_bm25_only": {
+          "auc": 0.498843,
+          "mrr": 0.31358,
+          "ndcg@5": 0.343722,
+          "ndcg@10": 0.428653
+        },
+        "after_reranked": {
+          "auc": 0.647818,
+          "mrr": 0.400072,
+          "ndcg@5": 0.451729,
+          "ndcg@10": 0.516799
+        },
+        "impressions": 3962
+      },
+      "retrieval_gated_inview_metrics": {
+        "protocol": "Catalog BM25 top-K gates the re-ranker. Non-retrieved logged candidates receive a stable bottom score; only in-view labels are observable, so this is an impression-grounded strict two-stage diagnostic.",
+        "metrics": {
+          "before_bm25_only": {
+            "auc": 0.511481,
+            "mrr": 0.319169,
+            "ndcg@5": 0.350714,
+            "ndcg@10": 0.436858
+          },
+          "after_reranked": {
+            "auc": 0.511606,
+            "mrr": 0.31959,
+            "ndcg@5": 0.351027,
+            "ndcg@10": 0.43717
+          },
+          "impressions": 3962
+        }
+      }
+    }
+  },
   "before_bm25_only": {
-    "auc": 0.499334,
-    "mrr": 0.313746,
-    "ndcg@5": 0.344958,
-    "ndcg@10": 0.428994
+    "auc": 0.498843,
+    "mrr": 0.31358,
+    "ndcg@5": 0.343722,
+    "ndcg@10": 0.428653
   },
   "after_reranked": {
-    "auc": 0.651238,
-    "mrr": 0.405936,
-    "ndcg@5": 0.455624,
-    "ndcg@10": 0.521474
+    "auc": 0.647818,
+    "mrr": 0.400072,
+    "ndcg@5": 0.451729,
+    "ndcg@10": 0.516799
   },
   "impressions": 3962
 }

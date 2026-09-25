@@ -1,42 +1,68 @@
 {
   "dataset": "ebnerd",
-  "dropped_features": [
+  "comparison": "offline_full_vs_submission_matched_serving_only",
+  "ranker_backend": "lightgbm_lambdarank",
+  "offline_full_columns": [
+    "category_affinity",
+    "topic_affinity",
+    "semantic_score",
     "popularity",
-    "semantic_score"
+    "freshness_hours_inv",
+    "session_prior_impressions",
+    "session_clicks_so_far",
+    "session_mean_dwell_time",
+    "position_bias",
+    "history_length",
+    "bm25_score"
   ],
-  "reason": "both depend on a batch-refreshed index (train click popularity, article_embeddings.npz) that lags for brand-new articles until the next offline refresh job runs",
+  "serving_only_columns": [
+    "category_affinity",
+    "topic_affinity",
+    "semantic_score",
+    "popularity",
+    "freshness_hours_inv",
+    "position_bias",
+    "history_length",
+    "bm25_score"
+  ],
+  "dropped_features": [
+    "session_prior_impressions",
+    "session_clicks_so_far",
+    "session_mean_dwell_time"
+  ],
+  "reason": "competition test impressions do not include preceding impressions, preceding session clicks, or a preceding dwell-time trace. Both submission generators therefore set these fields to zero and train with them excluded. Popularity and semantic score are retained from time-safe, versioned batch artifacts.",
   "metrics": {
     "auc": {
-      "baseline_mean": 0.704966,
-      "improved_mean": 0.651238,
-      "delta_mean": -0.053728,
-      "ci95_low": -0.062557,
-      "ci95_high": -0.04549,
-      "excludes_zero": true
+      "baseline_mean": 0.647818,
+      "improved_mean": 0.645001,
+      "delta_mean": -0.002816,
+      "ci95_low": -0.00639,
+      "ci95_high": 0.000822,
+      "excludes_zero": false
     },
     "mrr": {
-      "baseline_mean": 0.460667,
-      "improved_mean": 0.405936,
-      "delta_mean": -0.05473,
-      "ci95_low": -0.064766,
-      "ci95_high": -0.044908,
-      "excludes_zero": true
+      "baseline_mean": 0.400072,
+      "improved_mean": 0.402227,
+      "delta_mean": 0.002155,
+      "ci95_low": -0.002502,
+      "ci95_high": 0.006493,
+      "excludes_zero": false
     },
     "ndcg@5": {
-      "baseline_mean": 0.52045,
-      "improved_mean": 0.455624,
-      "delta_mean": -0.064826,
-      "ci95_low": -0.074818,
-      "ci95_high": -0.054944,
-      "excludes_zero": true
+      "baseline_mean": 0.451729,
+      "improved_mean": 0.449559,
+      "delta_mean": -0.002169,
+      "ci95_low": -0.006692,
+      "ci95_high": 0.002251,
+      "excludes_zero": false
     },
     "ndcg@10": {
-      "baseline_mean": 0.569806,
-      "improved_mean": 0.521474,
-      "delta_mean": -0.048332,
-      "ci95_low": -0.056764,
-      "ci95_high": -0.04026,
-      "excludes_zero": true
+      "baseline_mean": 0.516799,
+      "improved_mean": 0.517286,
+      "delta_mean": 0.000487,
+      "ci95_low": -0.003233,
+      "ci95_high": 0.004135,
+      "excludes_zero": false
     }
   }
 }

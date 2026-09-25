@@ -55,6 +55,7 @@ def rank_from_scores(scores) -> list[int]:
 
 def train_model(train_features: pd.DataFrame, columns: list[str]) -> LGBMRanker:
     if LGBMRanker is None:
+        print("WARNING: LightGBM unavailable - using HistGradientBoostingClassifier, NOT LambdaRank.")
         model = HistGradientBoostingClassifier(
             max_iter=200,
             max_leaf_nodes=31,
@@ -233,11 +234,13 @@ def run(
     model = train_model(train_features, columns)
     per_impression = score_validation(model, valid_features, columns)
     stage1_sets, stage1 = catalog_stage1_candidates(store, dataset, "validation", top_k, limit)
+    backend = getattr(model, "_a2_backend", "lightgbm_lambdarank")
+    backend_name = "LightGBM LambdaRank" if backend == "lightgbm_lambdarank" else "HistGradientBoosting (fallback)"
     stage2 = {
         "description": (
-            "LightGBM LambdaRank over submission-available behavioural, semantic, lexical, and article features"
+            f"{backend_name} over submission-available behavioural, semantic, lexical, and article features"
             if serving_only
-            else "LightGBM LambdaRank over behavioural, semantic, lexical, session, and article features"
+            else f"{backend_name} over behavioural, semantic, lexical, session, and article features"
         ),
         "in_view_reranker_metrics": summarize(per_impression),
     }

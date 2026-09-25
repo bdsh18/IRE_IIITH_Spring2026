@@ -2,23 +2,59 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from features import category_affinity, causal_click_times, causal_popularity_snapshot, user_session_click_count, user_session_mean_dwell, user_session_order
+from features import build_features, causal_click_times, causal_popularity_snapshot, user_session_click_count, user_session_mean_dwell, user_session_order
 
-def test_category_affinity_ignores_future_clicks():
-    category_by_id = {"a1": "sports", "a2": "tech", "future_click": "tech"}
-    history_ids = ["a1", "a1", "a2"]  # only clicks strictly before this impression
-    weights = [0.5, 0.7, 1.0]
 
-    score_without_future = category_affinity(history_ids, weights, category_by_id, "tech")
+def _impressions(rows):
+    frame = pd.DataFrame(rows, columns=["impression_id", "user_id", "timestamp", "candidate_ids", "clicked_ids", "history_ids"])
+    frame["timestamp"] = pd.to_datetime(frame.timestamp)
+    frame["history_recency_weights"] = frame.history_ids.map(lambda h: [0.8 ** (len(h) - 1 - i) for i in range(len(h))])
+    frame["session_id"] = ""
+    frame["dwell_time"] = 0.0
+    return frame
 
-    leaked_history_ids = history_ids + ["future_click"]
-    leaked_weights = weights + [1.0]
-    score_with_future = category_affinity(leaked_history_ids, leaked_weights, category_by_id, "tech")
 
-    assert score_without_future != score_with_future, (
-        "sanity check: the fixture should actually change the score, "
-        "otherwise this test can't detect a leak"
-    )
+def _toy_store(root: Path, validation_clicks: list[str]) -> Path:
+    """Tiny end-to-end store: two train impressions, one validation impression."""
+    store = root / "store"
+    folder = store / "toy"
+    folder.mkdir(parents=True)
+    pd.DataFrame({
+        "article_id": ["a", "b", "c"],
+        "title": ["alpha news", "beta news", "gamma news"],
+        "abstract": ["", "", ""],
+        "category": ["sports", "tech", "sports"],
+    }).to_parquet(folder / "articles.parquet", index=False)
+    _impressions([
+        ("tr1", "u1", "2024-01-01 10:00", ["a", "b"], ["a"], ["c"]),
+        ("tr2", "u2", "2024-01-01 12:00", ["a", "b"], ["b"], ["c"]),
+    ]).to_parquet(folder / "train_impressions.parquet", index=False)
+    validation = _impressions([("va1", "u3", "2024-01-02 10:00", ["a", "b", "c"], validation_clicks, ["a"])])
+    validation.to_parquet(folder / "validation_impressions.parquet", index=False)
+    validation.to_parquet(folder / "test_impressions.parquet", index=False)
+    return store
+
+
+def test_build_features_popularity_is_causal_inside_train(tmp_path):
+    """End-to-end: the real feature builder never counts a click at or after t."""
+    features = build_features(_toy_store(tmp_path, ["a"]), "toy", "train").set_index(["impression_id", "article_id"])
+    assert features.loc[("tr1", "a"), "popularity"] == 0, "own click at t leaked into popularity"
+    assert features.loc[("tr2", "b"), "popularity"] == 0, "own click at t leaked into popularity"
+    assert features.loc[("tr1", "b"), "popularity"] == 0, "a later click leaked backwards in time"
+    assert features.loc[("tr2", "a"), "popularity"] > 0, "sanity: an earlier click must be visible"
+
+
+def test_validation_features_do_not_depend_on_validation_labels(tmp_path):
+    """Flipping which candidate was clicked must not change any feature value.
+
+    If any feature read the impression's own labels, or clicks from the
+    validation period, the two feature tables would differ.
+    """
+    clicked_a = build_features(_toy_store(tmp_path / "one", ["a"]), "toy", "validation")
+    clicked_c = build_features(_toy_store(tmp_path / "two", ["c"]), "toy", "validation")
+    assert clicked_a.label.tolist() != clicked_c.label.tolist(), "sanity: the labels really differ"
+    pd.testing.assert_frame_equal(clicked_a.drop(columns="label"), clicked_c.drop(columns="label"))
+    assert clicked_c.set_index("article_id").loc["c", "popularity"] == 0
 
 
 def test_train_popularity_is_causal():

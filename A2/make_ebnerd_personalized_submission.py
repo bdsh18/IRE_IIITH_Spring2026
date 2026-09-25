@@ -35,14 +35,19 @@ def extract(archive: Path, member: str, target: Path) -> Path:
     return target
 
 
-def load_article_metadata(articles_path: Path) -> tuple[dict, dict, dict, dict, "InvertedBM25"]:
-    art = pq.read_table(articles_path, columns=["article_id", "category_str", "topics", "published_time", "title", "subtitle"])
+def load_article_metadata(articles_paths) -> tuple[dict, dict, dict, dict, "InvertedBM25"]:
+    if isinstance(articles_paths, (str, Path)):
+        articles_paths = [articles_paths]
     category_by_id, topics_by_id, published_by_id, titles = {}, {}, {}, {}
     ids, texts = [], []
-    for article, category, article_topics, timestamp, title, subtitle in zip(
-        art["article_id"], art["category_str"], art["topics"], art["published_time"], art["title"], art["subtitle"]
-    ):
+    rows = []
+    for articles_path in articles_paths:
+        art = pq.read_table(articles_path, columns=["article_id", "category_str", "topics", "published_time", "title", "subtitle"])
+        rows.extend(zip(art["article_id"], art["category_str"], art["topics"], art["published_time"], art["title"], art["subtitle"]))
+    for article, category, article_topics, timestamp, title, subtitle in rows:
         article_id = str(article.as_py())
+        if article_id in category_by_id:
+            continue
         category_by_id[article_id] = category.as_py() or ""
         topics_by_id[article_id] = tuple(article_topics.as_py() or [])
         published_by_id[article_id] = timestamp.as_py()
@@ -54,24 +59,31 @@ def load_article_metadata(articles_path: Path) -> tuple[dict, dict, dict, dict, 
     return category_by_id, topics_by_id, published_by_id, titles, bm25_index
 
 
-def load_training_popularity(train_path: Path) -> Counter:
+def load_training_popularity(behaviour_paths) -> Counter:
+    """Count clicks in labelled behaviour logs that precede the test period."""
+    if isinstance(behaviour_paths, (str, Path)):
+        behaviour_paths = [behaviour_paths]
     popularity: Counter = Counter()
-    parquet = pq.ParquetFile(train_path)
-    for group in tqdm(range(parquet.num_row_groups), desc="Load user histories", unit="row group"):
-        for clicked in parquet.read_row_group(group, columns=["article_ids_clicked"])["article_ids_clicked"].to_pylist():
-            popularity.update(str(a) for a in (clicked or []))
+    for train_path in behaviour_paths:
+        parquet = pq.ParquetFile(train_path)
+        for group in tqdm(range(parquet.num_row_groups), desc=f"Count clicks ({Path(train_path).name})", unit="row group"):
+            for clicked in parquet.read_row_group(group, columns=["article_ids_clicked"])["article_ids_clicked"].to_pylist():
+                popularity.update(str(a) for a in (clicked or []))
     return popularity
 
 
-def load_compact_histories(history_path: Path, keep_last: int = 30) -> dict[int, tuple]:
+def load_compact_histories(history_path: Path, keep_last: int = 30) -> tuple[dict[int, tuple], dict[int, int]]:
     preferences: dict[int, tuple] = {}
+    lengths: dict[int, int] = {}
     parquet = pq.ParquetFile(history_path)
     for group in range(parquet.num_row_groups):
         table = parquet.read_row_group(group, columns=["user_id", "article_id_fixed"])
         for user, items in zip(table["user_id"].to_pylist(), table["article_id_fixed"].to_pylist()):
-            preferences[int(user)] = tuple(str(x) for x in (items or [])[-keep_last:])
+            items = items or []
+            preferences[int(user)] = tuple(str(x) for x in items[-keep_last:])
+            lengths[int(user)] = len(items)
         print(f"  history group {group + 1}/{parquet.num_row_groups}")
-    return preferences
+    return preferences, lengths
 
 
 def build_feature_rows(history_ids, weights, candidates, now, category_by_id, topics_by_id, popularity, max_pop, positions, vectors, published_by_id, titles, bm25_index, query: str | None = None, context: dict | None = None):
@@ -206,7 +218,7 @@ def resume_count(test_path: Path, partial: Path, checkpoint: Path, fingerprint: 
     return completed
 
 
-def write_predictions(test_path: Path, model, columns, category_by_id, topics_by_id, published_by_id, titles, bm25_index, popularity, max_pop, positions, vectors, preferences, partial: Path, checkpoint: Path, fingerprint: str, batch_size: int = 5000, limit: int = 0, resume: bool = False, context_cache_size: int = 100_000) -> int:
+def write_predictions(test_path: Path, model, columns, category_by_id, topics_by_id, published_by_id, titles, bm25_index, popularity, max_pop, positions, vectors, preferences, partial: Path, checkpoint: Path, fingerprint: str, batch_size: int = 5000, limit: int = 0, resume: bool = False, context_cache_size: int = 100_000, history_lengths: dict[int, int] | None = None) -> int:
     written = resume_count(test_path, partial, checkpoint, fingerprint, batch_size, limit) if resume else 0
     if limit and written > limit:
         raise ValueError("Checkpoint contains more rows than the requested --limit")
@@ -240,6 +252,8 @@ def write_predictions(test_path: Path, model, columns, category_by_id, topics_by
             history_ids, weights, category_by_id, topics_by_id,
             popularity, max_pop, positions, vectors,
         )
+        if history_lengths is not None:
+            context["history_length"] = history_lengths.get(user, len(history_ids))
         entry = (history_ids, weights, query, context)
         if not history_ids:
             empty_history_entry = entry
@@ -341,7 +355,19 @@ def main() -> None:
     args = parser.parse_args()
 
     train = extract(args.large, "train/behaviors.parquet", args.work / "train.parquet")
+    behaviour_logs = [train]
+    try:
+        # The validation week is labelled and precedes the test period.
+        behaviour_logs.append(extract(args.large, "validation/behaviors.parquet", args.work / "validation.parquet"))
+    except KeyError:
+        print("  ebnerd_large has no validation/behaviors.parquet; popularity uses the train week only")
     articles = extract(args.large, "articles.parquet", args.work / "articles.parquet")
+    article_tables = [articles]
+    try:
+        # Test-period articles are only in the test-set bundle; list it first.
+        article_tables.insert(0, extract(args.testzip, "ebnerd_testset/articles.parquet", args.work / "test_articles.parquet"))
+    except KeyError:
+        print("  ebnerd_testset has no articles.parquet; using ebnerd_large articles only")
     history = extract(args.testzip, "ebnerd_testset/test/history.parquet", args.work / "history.parquet")
     test = extract(args.testzip, "ebnerd_testset/test/behaviors.parquet", args.work / "test.parquet")
 
@@ -353,7 +379,7 @@ def main() -> None:
     model = train_model(train_features, columns)
 
     print("Loading large-catalog article metadata...")
-    category_by_id, topics_by_id, published_by_id, titles, bm25_index = load_article_metadata(articles)
+    category_by_id, topics_by_id, published_by_id, titles, bm25_index = load_article_metadata(article_tables)
     print(f"  {len(category_by_id):,} articles indexed")
 
     print("Loading large-catalog document embeddings for semantic_score...")
@@ -367,12 +393,12 @@ def main() -> None:
         positions, vectors = None, None
 
     print("Counting training clicks...")
-    popularity = load_training_popularity(train)
+    popularity = load_training_popularity(behaviour_logs)
     max_pop = max(popularity.values(), default=1)
     print(f"  {len(popularity):,} clicked articles")
 
     print("Loading compact test-user histories...")
-    preferences = load_compact_histories(history)
+    preferences, history_lengths = load_compact_histories(history)
     print(f"  loaded compact histories for {len(preferences):,} users")
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -385,6 +411,7 @@ def main() -> None:
         test, model, columns, category_by_id, topics_by_id, published_by_id, titles,
         bm25_index, popularity, max_pop, positions, vectors, preferences, partial,
         checkpoint, fingerprint, args.batch_size, args.limit, args.resume, args.context_cache_size,
+        history_lengths,
     )
     if args.limit and total != args.limit:
         raise ValueError(f"Smoke test requested {args.limit} predictions but wrote {total}")

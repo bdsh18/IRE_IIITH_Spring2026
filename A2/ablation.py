@@ -8,7 +8,7 @@ import pandas as pd
 
 from features import ranker_feature_names
 from mind_personalized_ranker import metrics
-from reranker import build_dataset_features, rank_from_scores, score_validation, train_model
+from reranker import LGBMRanker, build_dataset_features, rank_from_scores, score_validation, train_model
 
 METRIC_NAMES = ["auc", "mrr", "ndcg@5", "ndcg@10"]
 # Available on both datasets, unlike freshness which is absent in MIND.
@@ -51,8 +51,8 @@ def ablate_from_scores(per_impression: dict) -> dict:
     return result
 
 
-def improvement_ablation_from_scores(full_scores: dict, without_feature_scores: dict) -> dict:
-    result = {"improvement_feature": IMPROVEMENT_FEATURE, "metrics": {}}
+def improvement_ablation_from_scores(full_scores: dict, without_feature_scores: dict, feature: str = IMPROVEMENT_FEATURE) -> dict:
+    result = {"improvement_feature": feature, "metrics": {}}
     for index, name in enumerate(METRIC_NAMES):
         baseline = per_impression_metric_series(without_feature_scores, "model_score", index)
         improved = per_impression_metric_series(full_scores, "model_score", index)
@@ -204,6 +204,12 @@ def main() -> None:
     )
     parser.add_argument("--output", type=Path, default=Path("outputs/q3_ablation.json"))
     parser.add_argument(
+        "--improvement-feature",
+        default=IMPROVEMENT_FEATURE,
+        help="feature removed in the controlled ablation (category_affinity exists in both datasets; "
+             "freshness_hours_inv is EB-NeRD only)",
+    )
+    parser.add_argument(
         "--starter-predictions",
         type=Path,
         help=(
@@ -214,8 +220,10 @@ def main() -> None:
     args = parser.parse_args()
 
     ranker_features = ranker_feature_names(serving_only=args.serving_only)
+    if args.improvement_feature not in ranker_features:
+        parser.error(f"--improvement-feature must be one of {ranker_features}")
     full_columns = ranker_features + ["bm25_score"]
-    without_feature_columns = [name for name in ranker_features if name != IMPROVEMENT_FEATURE] + ["bm25_score"]
+    without_feature_columns = [name for name in ranker_features if name != args.improvement_feature] + ["bm25_score"]
 
     train_features = build_dataset_features(args.store, args.dataset, "train", 0)
     valid_features = build_dataset_features(args.store, args.dataset, "validation", args.limit)
@@ -226,13 +234,18 @@ def main() -> None:
     result = {
         "dataset": args.dataset,
         "feature_policy": "submission_matched_serving_only" if args.serving_only else "offline_full",
+        "ranker_backend": "lightgbm_lambdarank" if LGBMRanker is not None else "sklearn_hist_gradient_boosting",
         "feature_columns": full_columns,
+        "impressions": len(full_scores),
         "reranker_vs_bm25": {"dataset": args.dataset, **ablate_from_scores(full_scores)},
         "reranker_vs_temporal_popularity_baseline": {
             "dataset": args.dataset,
             **temporal_popularity_baseline_ablation(valid_features, full_scores),
         },
-        "feature_ablation": {"dataset": args.dataset, **improvement_ablation_from_scores(full_scores, without_feature_scores)},
+        "feature_ablation": {
+            "dataset": args.dataset,
+            **improvement_ablation_from_scores(full_scores, without_feature_scores, args.improvement_feature),
+        },
         "external_starter_baseline": {
             "status": "not_supplied",
             "note": (

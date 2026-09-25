@@ -1,13 +1,13 @@
 [
   {
     "dataset": "mind",
-    "embedding_articles": 56154,
+    "embedding_articles": 56777,
     "embedding_dimensions": 100,
     "index": "brute-force cosine ANN baseline",
     "evaluated_impressions": 29404,
     "recall@50": 0.003506271687471524,
-    "recall@100": 0.006210957153005854,
-    "recall@200": 0.010454806533571328,
+    "recall@100": 0.006134436951672702,
+    "recall@200": 0.010426276779494028,
     "slices": {
       "cold_history_under_5": {
         "evaluated_impressions": 3156,
@@ -17,9 +17,9 @@
       },
       "warm_history_5_or_more": {
         "evaluated_impressions": 26248,
-        "recall@50": 0.003285269202672433,
-        "recall@100": 0.005864331915840602,
-        "recall@200": 0.00989458744716288
+        "recall@50": 0.003285269202672434,
+        "recall@100": 0.005778611099016463,
+        "recall@200": 0.009862627340149437
       }
     }
   },

@@ -11,7 +11,8 @@ from tqdm.auto import tqdm
 from bm25_retrieval import InvertedBM25, query_from_history
 from features import (
     article_metadata,
-    candidate_features,
+    candidate_features_from_context,
+    prepare_candidate_context,
     load_embeddings,
     ranker_feature_names,
     train_popularity,
@@ -134,11 +135,14 @@ def latency_benchmark(store: Path, dataset: str, model, columns: list[str], repe
         # The benchmark is deliberately submission-matched.  Competition test
         # data has no preceding within-session trace, so these values cannot be
         # supplied at request time.
+        context = prepare_candidate_context(
+            history_ids, weights, category_by_id, topics_by_id,
+            popularity, max_pop, positions, vectors,
+        )
         feature_rows = [
-            candidate_features(
-                article, position, history_ids, weights, category_by_id, topics_by_id,
-                popularity, max_pop, positions, vectors, published_by_id, row.timestamp,
-                0, 0, 0.0,
+            candidate_features_from_context(
+                article, position, context, category_by_id, topics_by_id,
+                published_by_id, row.timestamp, 0, 0, 0.0,
             ) | {"bm25_score": candidate_scores.get(article, 0.0)}
             for position, article in enumerate(candidates)
         ]
@@ -208,6 +212,8 @@ def semantic_latency_benchmark(store: Path, dataset: str, repeats: int) -> dict:
 
 def cost_estimate(p99_ms: float, target_sla_ms: float, single_machine_qps: float, machine_cost_per_hour: float, target_qps: int = 1000) -> dict:
     machines_needed = int(max(1, -(-target_qps // max(single_machine_qps, 1))))
+    cost_per_hour = machines_needed * machine_cost_per_hour
+    queries_per_hour = target_qps * 3600
     return {
         "measured_p99_ms": p99_ms,
         "target_sla_ms": target_sla_ms,
@@ -215,7 +221,12 @@ def cost_estimate(p99_ms: float, target_sla_ms: float, single_machine_qps: float
         "assumed_single_machine_qps": single_machine_qps,
         "target_qps": target_qps,
         "machines_needed": machines_needed,
-        "estimated_cost_per_hour_usd": round(machines_needed * machine_cost_per_hour, 2),
+        "estimated_cost_per_hour_usd": round(cost_per_hour, 2),
+        "estimated_cost_per_1000_queries_usd": round(cost_per_hour / queries_per_hour * 1000, 5),
+        "note": (
+            "Adding machines raises throughput but does not lower per-request latency; "
+            "the cost figure is only valid at the SLA once single-request p99 is below the target."
+        ),
     }
 
 

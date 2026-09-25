@@ -1,77 +1,92 @@
 {
   "dataset": "mind",
+  "feature_policy": "submission_matched_serving_only",
+  "ranker_backend": "lightgbm_lambdarank",
+  "feature_columns": [
+    "category_affinity",
+    "topic_affinity",
+    "semantic_score",
+    "popularity",
+    "freshness_hours_inv",
+    "position_bias",
+    "history_length",
+    "bm25_score"
+  ],
+  "impressions": 30269,
   "reranker_vs_bm25": {
     "dataset": "mind",
     "impressions": 30269,
     "metrics": {
       "auc": {
-        "baseline_mean": 0.54512,
-        "improved_mean": 0.590204,
-        "delta_mean": 0.045084,
-        "ci95_low": 0.041253,
-        "ci95_high": 0.048814,
+        "baseline_mean": 0.543076,
+        "improved_mean": 0.590244,
+        "delta_mean": 0.047168,
+        "ci95_low": 0.043158,
+        "ci95_high": 0.050981,
         "excludes_zero": true
       },
       "mrr": {
-        "baseline_mean": 0.28294,
-        "improved_mean": 0.301915,
-        "delta_mean": 0.018975,
-        "ci95_low": 0.016231,
-        "ci95_high": 0.021833,
+        "baseline_mean": 0.282864,
+        "improved_mean": 0.301925,
+        "delta_mean": 0.019061,
+        "ci95_low": 0.016287,
+        "ci95_high": 0.021904,
         "excludes_zero": true
       },
       "ndcg@5": {
-        "baseline_mean": 0.254381,
-        "improved_mean": 0.276504,
-        "delta_mean": 0.022123,
-        "ci95_low": 0.019073,
-        "ci95_high": 0.025076,
+        "baseline_mean": 0.254439,
+        "improved_mean": 0.276467,
+        "delta_mean": 0.022028,
+        "ci95_low": 0.019018,
+        "ci95_high": 0.024999,
         "excludes_zero": true
       },
       "ndcg@10": {
-        "baseline_mean": 0.311059,
-        "improved_mean": 0.335893,
-        "delta_mean": 0.024834,
-        "ci95_low": 0.022167,
-        "ci95_high": 0.027498,
+        "baseline_mean": 0.310678,
+        "improved_mean": 0.335841,
+        "delta_mean": 0.025163,
+        "ci95_low": 0.022406,
+        "ci95_high": 0.027805,
         "excludes_zero": true
       }
     }
   },
-  "reranker_vs_reproduced_popularity_baseline": {
+  "reranker_vs_temporal_popularity_baseline": {
     "dataset": "mind",
-    "baseline": "most_popular",
+    "baseline": "causal_temporal_popularity",
+    "baseline_source": "internal_feature_store",
+    "baseline_description": "Ranks with the project\u2019s causal popularity feature computed from behaviour strictly before each impression.",
     "metrics": {
       "auc": {
-        "baseline_mean": 0.516969,
-        "improved_mean": 0.590204,
-        "delta_mean": 0.073235,
-        "ci95_low": 0.068627,
-        "ci95_high": 0.077745,
+        "baseline_mean": 0.516819,
+        "improved_mean": 0.590244,
+        "delta_mean": 0.073425,
+        "ci95_low": 0.068709,
+        "ci95_high": 0.077911,
         "excludes_zero": true
       },
       "mrr": {
-        "baseline_mean": 0.242331,
-        "improved_mean": 0.301915,
-        "delta_mean": 0.059584,
-        "ci95_low": 0.055754,
-        "ci95_high": 0.063411,
+        "baseline_mean": 0.242174,
+        "improved_mean": 0.301925,
+        "delta_mean": 0.059752,
+        "ci95_low": 0.05598,
+        "ci95_high": 0.063656,
         "excludes_zero": true
       },
       "ndcg@5": {
-        "baseline_mean": 0.217056,
-        "improved_mean": 0.276504,
-        "delta_mean": 0.059447,
-        "ci95_low": 0.055523,
-        "ci95_high": 0.063321,
+        "baseline_mean": 0.216792,
+        "improved_mean": 0.276467,
+        "delta_mean": 0.059675,
+        "ci95_low": 0.055786,
+        "ci95_high": 0.063644,
         "excludes_zero": true
       },
       "ndcg@10": {
-        "baseline_mean": 0.278009,
-        "improved_mean": 0.335893,
-        "delta_mean": 0.057884,
-        "ci95_low": 0.054221,
-        "ci95_high": 0.061407,
+        "baseline_mean": 0.277839,
+        "improved_mean": 0.335841,
+        "delta_mean": 0.058002,
+        "ci95_low": 0.054356,
+        "ci95_high": 0.061671,
         "excludes_zero": true
       }
     }
@@ -81,37 +96,41 @@
     "improvement_feature": "category_affinity",
     "metrics": {
       "auc": {
-        "baseline_mean": 0.564785,
-        "improved_mean": 0.590204,
-        "delta_mean": 0.02542,
-        "ci95_low": 0.022866,
-        "ci95_high": 0.02806,
+        "baseline_mean": 0.564786,
+        "improved_mean": 0.590244,
+        "delta_mean": 0.025458,
+        "ci95_low": 0.022898,
+        "ci95_high": 0.028091,
         "excludes_zero": true
       },
       "mrr": {
-        "baseline_mean": 0.287822,
-        "improved_mean": 0.301915,
-        "delta_mean": 0.014093,
-        "ci95_low": 0.01192,
-        "ci95_high": 0.016362,
+        "baseline_mean": 0.287864,
+        "improved_mean": 0.301925,
+        "delta_mean": 0.014061,
+        "ci95_low": 0.011903,
+        "ci95_high": 0.016321,
         "excludes_zero": true
       },
       "ndcg@5": {
-        "baseline_mean": 0.26078,
-        "improved_mean": 0.276504,
-        "delta_mean": 0.015723,
-        "ci95_low": 0.013527,
-        "ci95_high": 0.017978,
+        "baseline_mean": 0.260869,
+        "improved_mean": 0.276467,
+        "delta_mean": 0.015598,
+        "ci95_low": 0.013434,
+        "ci95_high": 0.017865,
         "excludes_zero": true
       },
       "ndcg@10": {
-        "baseline_mean": 0.319347,
-        "improved_mean": 0.335893,
-        "delta_mean": 0.016547,
-        "ci95_low": 0.01455,
-        "ci95_high": 0.018608,
+        "baseline_mean": 0.319342,
+        "improved_mean": 0.335841,
+        "delta_mean": 0.016499,
+        "ci95_low": 0.014517,
+        "ci95_high": 0.018584,
         "excludes_zero": true
       }
     }
+  },
+  "external_starter_baseline": {
+    "status": "not_supplied",
+    "note": "No external starter prediction file was provided. Run with --starter-predictions PATH after generating rankings on the identical validation split."
   }
 }

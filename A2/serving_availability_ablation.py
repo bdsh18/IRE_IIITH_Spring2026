@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ablation import METRIC_NAMES, paired_bootstrap, per_impression_metric_series
 from features import SUBMISSION_TIME_UNAVAILABLE, ranker_feature_names
-from reranker import build_dataset_features, score_validation, train_model
+from reranker import LGBMRanker, build_dataset_features, score_validation, train_model
 
 def score_with_columns(train_features, valid_features, columns: list[str]) -> dict:
     model = train_model(train_features, columns)
@@ -29,6 +29,7 @@ def serving_availability_check(store: Path, dataset: str, limit: int) -> dict:
     result = {
         "dataset": dataset,
         "comparison": "offline_full_vs_submission_matched_serving_only",
+        "ranker_backend": "lightgbm_lambdarank" if LGBMRanker is not None else "sklearn_hist_gradient_boosting",
         "offline_full_columns": full_columns,
         "serving_only_columns": serving_columns,
         "dropped_features": list(SUBMISSION_TIME_UNAVAILABLE),

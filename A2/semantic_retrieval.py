@@ -21,10 +21,15 @@ def entity_ids(raw: object) -> list[str]:
 def mind_embeddings(source: Path, article_ids: list[str]) -> tuple[list[str], np.ndarray]:
     news = pd.concat([pd.read_csv(source / "data/raw/mind_train/MINDsmall_train/news.tsv", sep="\t", header=None, names=["id","category","subcategory","title","abstract","url","title_entities","abstract_entities"], quoting=3), pd.read_csv(source / "data/raw/mind_dev/MINDsmall_dev/news.tsv", sep="\t", header=None, names=["id","category","subcategory","title","abstract","url","title_entities","abstract_entities"], quoting=3)]).drop_duplicates("id")
     embeddings: dict[str, np.ndarray] = {}
-    with (source / "data/raw/mind_train/MINDsmall_train/entity_embedding.vec").open() as file:
-        for line in file:
-            fields = line.rstrip().split("\t")
-            embeddings[fields[0]] = np.asarray(fields[1:], dtype=np.float32)
+    for vec_path in (source / "data/raw/mind_train/MINDsmall_train/entity_embedding.vec",
+                     source / "data/raw/mind_dev/MINDsmall_dev/entity_embedding.vec"):
+        if not vec_path.exists():
+            continue
+        with vec_path.open() as file:
+            for line in file:
+                fields = line.rstrip().split("\t")
+                if len(fields) > 1 and fields[0] not in embeddings:
+                    embeddings[fields[0]] = np.asarray(fields[1:], dtype=np.float32)
     vectors = []; ids = []
     wanted = set(article_ids)
     for row in news.itertuples(index=False):

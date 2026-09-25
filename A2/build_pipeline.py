@@ -1,7 +1,6 @@
 from __future__ import annotations
 import argparse
 import json
-import shutil
 import zipfile
 from pathlib import Path
 import pandas as pd
@@ -44,7 +43,7 @@ def load_mind(folder: Path, split: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     articles["article_id"] = articles.article_id.astype(str)
     behaviors = pd.read_csv(folder / "behaviors.tsv", sep="\t", names=MIND_BEHAVIORS, header=None, quoting=3)
     parsed = behaviors.raw_candidates.map(mind_candidates)
-    impressions = pd.DataFrame({"dataset": "mind", "source_split": split, "impression_id": behaviors.impression_id.astype(str), "user_id": behaviors.user_id.astype(str), "timestamp": pd.to_datetime(behaviors.timestamp), "candidate_ids": parsed.map(lambda x: x[0]), "clicked_ids": parsed.map(lambda x: x[1]), "history_ids": behaviors.history.map(tokens), "session_id": "", "dwell_time": 0.0})
+    impressions = pd.DataFrame({"dataset": "mind", "source_split": split, "impression_id": f"{split}-" + behaviors.impression_id.astype(str), "user_id": behaviors.user_id.astype(str), "timestamp": pd.to_datetime(behaviors.timestamp), "candidate_ids": parsed.map(lambda x: x[0]), "clicked_ids": parsed.map(lambda x: x[1]), "history_ids": behaviors.history.map(tokens), "session_id": "", "dwell_time": 0.0})
     impressions["history_recency_weights"] = impressions.history_ids.map(recency_weights)
     return articles[["dataset", "source_split", "article_id", "title", "abstract", "body", "category", "subcategory", "entities", "embedding_available", "embedding_path"]], impressions
 

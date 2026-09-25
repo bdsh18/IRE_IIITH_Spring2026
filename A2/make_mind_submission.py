@@ -48,12 +48,19 @@ def entity_ids(raw: str) -> list[str]:
     return [item.get("WikidataId") for item in values if item.get("WikidataId")]
 
 
-def load_entity_vectors(train: Path) -> dict[str, np.ndarray]:
+def load_entity_vectors(archives: list[Path]) -> dict[str, np.ndarray]:
+    """Union of entity_embedding.vec across splits (dev/test add new entities)."""
     vectors: dict[str, np.ndarray] = {}
-    with zipfile.ZipFile(train) as bundle, bundle.open(member(train, "/entity_embedding.vec")) as raw:
-        for line in tqdm(raw, desc="MIND predictions", unit="impression"):
-            fields = line.decode().rstrip().split("\t")
-            vectors[fields[0]] = np.asarray(fields[1:], dtype=np.float32)
+    for archive in archives:
+        try:
+            vec_member = member(archive, "/entity_embedding.vec")
+        except StopIteration:
+            continue
+        with zipfile.ZipFile(archive) as bundle, bundle.open(vec_member) as raw:
+            for line in tqdm(raw, desc=f"Entity vectors ({archive.name})", unit="entity"):
+                fields = line.decode().rstrip().split("\t")
+                if len(fields) > 1 and fields[0] not in vectors:
+                    vectors[fields[0]] = np.asarray(fields[1:], dtype=np.float32)
     return vectors
 
 
@@ -309,12 +316,12 @@ def main() -> None:
     print(f"  {len(news):,} articles indexed")
 
     print("Loading MINDlarge entity embeddings for semantic_score...")
-    entity_vectors = load_entity_vectors(args.train)
+    entity_vectors = load_entity_vectors(archives)
     positions, vectors = load_article_embeddings(archives, entity_vectors)
     print(f"  {len(positions) if positions else 0:,} articles have an entity embedding")
 
-    print("Counting clicks in MINDlarge_train...")
-    popularity = click_popularity(args.train)
+    print("Counting clicks in MINDlarge_train + MINDlarge_dev (both precede the test week)...")
+    popularity = click_popularity(args.train) + click_popularity(args.dev)
     max_pop = max(popularity.values(), default=1)
     print(f"  {len(popularity):,} clicked articles")
 

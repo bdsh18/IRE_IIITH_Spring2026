@@ -22,7 +22,7 @@ def metadata(archives: list[Path]) -> dict[str, tuple[str, str]]:
 def popularity(train: Path) -> Counter:
     out = Counter()
     with zipfile.ZipFile(train) as z, z.open(member(train, "/behaviors.tsv")) as f:
-        for line in tqdm(f, desc="MIND evaluation", unit="impression"):
+        for line in tqdm(f, desc="Count train clicks", unit="impression"):
             x = line.decode("utf-8").rstrip("\n").split("\t")
             if len(x) == 5:
                 for item in x[4].split():
@@ -58,7 +58,7 @@ def metrics(rank_list, labels):
 def evaluate(dev, meta, pop, limit):
     totals = {"popularity": [0., 0., 0., 0.], "personalized": [0., 0., 0., 0.]}; n = 0
     with zipfile.ZipFile(dev) as z, z.open(member(dev, "/behaviors.tsv")) as f:
-        for line in tqdm(f, desc="MIND submission", unit="impression"):
+        for line in tqdm(f, desc="MIND dev evaluation", unit="impression"):
             x = line.decode("utf-8").rstrip("\n").split("\t")
             if len(x) != 5: continue
             history = x[3].split() if x[3] else []; candidates, labels = [], []

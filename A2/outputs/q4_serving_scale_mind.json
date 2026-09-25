@@ -1,5 +1,16 @@
 {
   "dataset": "mind",
+  "feature_policy": "submission_matched_serving_only",
+  "feature_columns": [
+    "category_affinity",
+    "topic_affinity",
+    "semantic_score",
+    "popularity",
+    "freshness_hours_inv",
+    "position_bias",
+    "history_length",
+    "bm25_score"
+  ],
   "corpus_size": {
     "catalog_articles": 65238,
     "raw_title_abstract_bytes": 17973603,
@@ -12,52 +23,57 @@
     "bm25_vocabulary_terms": 60922,
     "bm25_total_postings": 1842137,
     "bm25_postings_bytes_approx": 103159672,
-    "bm25_index_build_seconds": 1.7472,
-    "bm25_index_throughput_docs_per_sec": 37337.7,
+    "bm25_index_build_seconds": 1.7787,
+    "bm25_index_throughput_docs_per_sec": 36676.9,
     "embedding_dimensions": 100,
-    "embedding_index_bytes_in_memory": 22461600,
-    "embedding_index_bytes_on_disk_compressed": 20810308,
-    "embedding_index_load_seconds": 0.1307,
-    "embedding_index_load_throughput_vectors_per_sec": 429761.1
+    "embedding_index_bytes_in_memory": 22710800,
+    "embedding_index_bytes_on_disk_compressed": 21071449,
+    "embedding_index_load_seconds": 0.1313,
+    "embedding_index_load_throughput_vectors_per_sec": 432414.5,
+    "ann_index_type": "FAISS IndexHNSWFlat(M=32, efSearch=64)",
+    "ann_index_serialized_bytes": 38165598
   },
   "feature_store_size": {
-    "parquet_bytes_on_disk": 56545307,
+    "parquet_bytes_on_disk": 154959284,
     "validation_feature_rows": 1222481,
-    "feature_table_bytes_in_memory_per_1k_rows": 119133
+    "feature_table_bytes_in_memory_per_1k_rows": 133133
   },
   "latency_end_to_end_lexical_plus_rerank": {
     "n_requests": 300,
-    "benchmark_wall_seconds": 82.311,
-    "measured_single_process_qps": 3.64,
-    "p50_ms": 278.329,
-    "p95_ms": 377.624,
-    "p99_ms": 464.181,
-    "mean_ms": 273.962,
+    "benchmark_wall_seconds": 13.874,
+    "measured_single_process_qps": 21.62,
+    "p50_ms": 47.371,
+    "p95_ms": 71.16,
+    "p99_ms": 81.47,
+    "mean_ms": 46.144,
     "avg_query_length_tokens": 51.31,
     "avg_candidates_retrieved": 190.0,
     "littles_law_check": {
       "N_concurrent_requests": 1,
-      "predicted_qps_1_over_mean_latency": 3.65,
-      "measured_qps": 3.64,
+      "predicted_qps_1_over_mean_latency": 21.67,
+      "measured_qps": 21.62,
       "holds": true
     }
   },
   "latency_semantic_scoring_only": {
+    "index_type": "FAISS IndexHNSWFlat(M=32, efSearch=64)",
     "n_requests": 300,
-    "measured_single_process_qps": 36.21,
-    "p50_ms": 26.931,
-    "p95_ms": 54.934,
-    "p99_ms": 95.216,
-    "mean_ms": 27.438
+    "measured_single_process_qps": 3238.17,
+    "p50_ms": 0.235,
+    "p95_ms": 0.514,
+    "p99_ms": 0.608,
+    "mean_ms": 0.289
   },
   "cost_estimate": {
-    "measured_p99_ms": 464.181,
+    "measured_p99_ms": 81.47,
     "target_sla_ms": 100.0,
-    "meets_sla_single_machine": false,
-    "assumed_single_machine_qps": 3.64,
+    "meets_sla_single_machine": true,
+    "assumed_single_machine_qps": 21.62,
     "target_qps": 1000,
-    "machines_needed": 275,
-    "estimated_cost_per_hour_usd": 137.5
+    "machines_needed": 47,
+    "estimated_cost_per_hour_usd": 23.5,
+    "estimated_cost_per_1000_queries_usd": 0.00653,
+    "note": "Adding machines raises throughput but does not lower per-request latency; the cost figure is only valid at the SLA once single-request p99 is below the target."
   },
   "ten_x_scaling_notes": [
     "BM25 postings and the brute-force cosine embedding index both live in a single process; at 10x catalog size the embedding index needs FAISS/HNSW ANN rather than a full matrix-vector product per request.",
